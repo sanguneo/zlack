@@ -34,7 +34,6 @@
     "pretauri": "npm run update-version",
     "update-version": "node scripts/update-version.js",
     "build:dist:windows": "powershell -ExecutionPolicy Bypass -File build_dist.ps1",
-    "build:dist:windows:fixed": "powershell -ExecutionPolicy Bypass -File build_dist_fixed.ps1",
     "build:dist:unix": "bash build_dist.sh"
   },
   "devDependencies": {

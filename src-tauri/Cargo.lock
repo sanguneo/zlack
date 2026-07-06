@@ -8,10 +8,14 @@ version = "1.2.0"
 dependencies = [
  "image",
  "lazy_static",
+ "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-single-instance",
  "tauri-winrt-notification",
+ "webview2-com",
+ "windows 0.39.0",
  "windows 0.48.0",
 ]
 

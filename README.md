@@ -8,7 +8,8 @@
 
 *   **Native Desktop Notifications**: Integrated directly with Windows native toast notifications.
 *   **Unread Tray & Title Badges**: The tray icon shows a red badge for unread DMs/@mentions and a blue badge for other unread messages, and the window title is prefixed with `!` for unread DMs — handy if you prefer ambient indicators over toast popups.
-*   **Firewall-Friendly Build (optional)**: A Windows build variant can bundle a private, fixed-version WebView2 runtime so firewall rules can be scoped to Zlack alone.
+*   **Custom CSS & Icon**: Place `zlack.css`, `zlack.png`, `zlack.ico`, or `zlack-taskbar.png` next to the executable to customize Slack's UI and Zlack's running icons.
+*   **Private WebView2 Runtime (optional)**: On Windows, Zlack uses a private `webview2-runtime` folder next to the executable when present, otherwise it falls back to the shared system WebView2 runtime.
 *   **Smart Context**: Extracts `Team ID` and `Channel ID` from Slack's console logs to ensure notifications take you to the exact right place.
 *   **Background Reliability**: Includes a custom rust backend to ensure clicking a notification properly restores the window from the system tray and focuses it.
 *   **Multi-Workspace Support**: Handles navigation for multiple Slack workspaces via standard webview login.
@@ -66,21 +67,34 @@ npm run build:dist:unix
 ```
 This requires running on a Mac or Linux machine. It will generate `.dmg`/`.app` (macOS) or `.deb`/`.AppImage` (Linux) in the `dists/` folder.
 
-**Build with a private, fixed WebView2 runtime (Windows):**
-```bash
-npm run build:dist:windows:fixed
-```
-By default Zlack uses the shared, system-wide WebView2 runtime. Because that runtime is shared, allowing it through a software firewall effectively allows *any* app to reach the internet through it. This variant instead bundles a **private, fixed-version WebView2 runtime** inside Zlack's own directory, so you can write a firewall rule scoped to Zlack alone (issue #2). The trade-off is a ~150–180MB larger installer.
+**Optional private WebView2 runtime (Windows):**
 
-The runtime is downloaded once and is not committed to the repo. Get the **Fixed Version** `.cab` for your architecture from the [WebView2 download page](https://developer.microsoft.com/microsoft-edge/webview2/), then run:
-```powershell
-# pass the cab path directly...
-npm run build:dist:windows:fixed -- "C:\path\to\Microsoft.WebView2.FixedVersionRuntime.<ver>.x64.cab"
-# ...or via an env var, or a direct URL:
-$env:WEBVIEW2_FIXED_CAB = "C:\path\to.cab"; npm run build:dist:windows:fixed
-$env:WEBVIEW2_FIXED_URL = "https://.../...cab"; npm run build:dist:windows:fixed
+By default Zlack uses the shared, system-wide WebView2 runtime. Because that runtime is shared, allowing it through a software firewall effectively allows *any* app to reach the internet through it.
+
+To use a private runtime instead, get the **Fixed Version** WebView2 runtime for your architecture from the [WebView2 download page](https://developer.microsoft.com/microsoft-edge/webview2/), extract it, and place it next to `Zlack.exe` as:
+
+```text
+Zlack.exe
+webview2-runtime/
+  msedgewebview2.exe
+  ...
 ```
-Once extracted to `src-tauri/webview2-runtime/`, subsequent builds reuse it. Output installers are suffixed `_webview2fixed`.
+
+If `webview2-runtime/msedgewebview2.exe` exists, Zlack uses it. Otherwise, it falls back to the shared system runtime.
+
+## 🎨 Customization
+
+Place optional customization files next to `Zlack.exe`:
+
+```text
+Zlack.exe
+zlack.css          # injected into Slack
+zlack.png          # preferred custom running icon
+zlack.ico          # fallback custom running icon
+zlack-taskbar.png  # optional Windows taskbar-only override
+```
+
+The custom icon is used for the window, taskbar, and tray badge base. If `zlack-taskbar.png` exists, it overrides only the Windows taskbar icon. The embedded exe/installer icon remains fixed until rebuilt.
 
 ## 🧩 How It Works
 

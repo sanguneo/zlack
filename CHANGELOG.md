@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Customization files**: `zlack.css` next to the executable is injected into Slack, `zlack.png` / `zlack.ico` can override the running window/taskbar/tray icon, and `zlack-taskbar.png` can override only the Windows taskbar icon.
+
 ## [1.2.0] - 2026-06-19
 
 ### Added
 - **Unread Badges** ([#3](https://github.com/sanguneo/zlack/issues/3)): Zlack now mirrors Slack's unread state without relying on popup notifications — red for unread DMs / @mentions, blue for other unread messages. It is shown in three places: the system-tray icon swaps to a badged variant, the **Windows taskbar button gets an overlay badge** (`ITaskbarList3::SetOverlayIcon`, stamped with the unread DM/mention count when available), and the window title is prefixed with `!` when there are unread DMs / mentions. Detection is driven from the Slack tab title in `preload.js`; native rendering lives in `main.rs`.
-- **Fixed WebView2 Runtime Build** ([#2](https://github.com/sanguneo/zlack/issues/2)): Added an optional Windows build (`npm run build:dist:windows:fixed`) that bundles a private, fixed-version WebView2 runtime inside Zlack's directory via `webviewInstallMode: fixedRuntime`. This lets users scope a software-firewall rule to Zlack instead of allowing the shared system WebView2. The default build is unchanged (smaller, shared runtime).
+- **Private WebView2 Runtime Support** ([#2](https://github.com/sanguneo/zlack/issues/2)): On Windows, Zlack now uses a private `webview2-runtime` folder next to the executable when present, otherwise it falls back to the shared system WebView2 runtime. This lets users scope a software-firewall rule to Zlack without requiring a separate fixed-runtime build.
 
 ### Changed
 - **Notification context correlation**: `preload.js` now timestamps captured Slack telemetry and only attaches a team/channel to a notification when that context was captured close in time to it, so a notification without its own context no longer inherits the previously captured channel.

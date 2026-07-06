@@ -12,12 +12,16 @@ tauri-build = { version = "1", features = [] }
 
 [dependencies]
 lazy_static = "1.5.0"
-image = { version = "0.24", default-features = false, features = ["png"] }
+image = { version = "0.24", default-features = false, features = ["png", "ico"] }
 tauri = { version = "1", features = [ "notification-all", "shell-open", "system-tray"] }
 tauri-plugin-single-instance = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [target.'cfg(windows)'.dependencies]
 tauri-winrt-notification = "0.7.2"
+webview2-com = "0.19.1"
+windows-webview2 = { package = "windows", version = "0.39.0" }
 windows = { version = "0.48", features = [
   "Win32_Foundation",
   "Win32_System_Com",
