@@ -4,12 +4,10 @@
     "distDir": "../src",
     "withGlobalTauri": true
   },
-
   "package": {
     "productName": "Zlack",
-    "version": "1.2.0"
+    "version": "1.3.0"
   },
-
   "tauri": {
     "allowlist": {
       "all": false,
@@ -21,38 +19,36 @@
         "all": true
       }
     },
-
     "windows": [],
-
     "security": {
       "csp": null,
       "dangerousRemoteDomainIpcAccess": [
         {
           "domain": "app.slack.com",
-          "windows": ["main"],
+          "windows": [
+            "main"
+          ],
           "enableTauriAPI": true
         },
         {
           "domain": "slack.com",
-          "windows": ["main"],
+          "windows": [
+            "main"
+          ],
           "enableTauriAPI": true
         }
       ]
     },
-
     "systemTray": {
       "iconPath": "icons/icon.png",
       "iconAsTemplate": true,
       "menuOnLeftClick": false
     },
-
     "bundle": {
       "active": true,
       "targets": "all",
-
       "identifier": "com.sanguneo.zlack",
       "publisher": "sanguneo",
-
       "icon": [
         "icons/icon.ico",
         "icons/32x32.png",
@@ -60,7 +56,6 @@
         "icons/128x128@2x.png",
         "icons/icon.icns"
       ],
-
       "macOS": {
         "frameworks": [],
         "minimumSystemVersion": "10.13",
