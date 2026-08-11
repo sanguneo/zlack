@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-08-11
+
+### Security
+- **Workspace URL validation**: Remote IPC is now granted only to credential-free HTTPS URLs on slack.com or its subdomains, blocking lookalike domains such as evilslack.com.
+- **External link boundary**: Replaced the remote page's global shell capability with a typed Rust command that opens only credential-free HTTP(S) URLs and rejects file/custom protocols.
+- **Reduced remote capabilities**: Removed the Tauri frontend shell and notification allowlists while preserving native notifications through direct platform APIs.
+
+## [1.3.1] - 2026-07-06
+
 ### Added
 - **Customization files**: `zlack.css` next to the executable is injected into Slack, `zlack.png` / `zlack.ico` can override the running window/taskbar/tray icon, and `zlack-taskbar.png` can override only the Windows taskbar icon.
 
