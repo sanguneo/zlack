@@ -1,115 +1,183 @@
-# Zlack
+<p align="center">
+  <img src="src-tauri/icons/128x128.png" width="112" height="112" alt="Zlack app icon">
+</p>
 
-**Zlack** is a lightweight, optimized desktop wrapper for [Slack](https://slack.com/), built with [Tauri](https://tauri.app/). It provides a native application experience with robust desktop notifications, handling deep links and window focus correctly even when minimized.
+<h1 align="center">Zlack</h1>
 
-![Zlack Icon](src-tauri/icons/128x128.png)
+<p align="center">
+  <strong>A focused Slack desktop client powered by Tauri.</strong><br>
+  Native notifications, reliable window restoration, and multi-workspace switching<br>
+  without shipping a full Chromium bundle.
+</p>
 
-## 🚀 Features
+<p align="center">
+  <a href="https://github.com/sanguneo/zlack/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/sanguneo/zlack?style=flat-square&color=4A154B"></a>
+  <a href="https://github.com/sanguneo/zlack/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-2EB67D?style=flat-square"></a>
+  <img alt="Tauri 1" src="https://img.shields.io/badge/Tauri-1-24C8DB?style=flat-square&logo=tauri&logoColor=white">
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-native%20core-E01E5A?style=flat-square&logo=rust&logoColor=white">
+</p>
 
-*   **Native Desktop Notifications**: Integrated directly with Windows native toast notifications.
-*   **Unread Tray & Title Badges**: The tray icon shows a red badge for unread DMs/@mentions and a blue badge for other unread messages, and the window title is prefixed with `!` for unread DMs — handy if you prefer ambient indicators over toast popups.
-*   **Custom CSS & Icon**: Place `zlack.css`, `zlack.png`, `zlack.ico`, or `zlack-taskbar.png` next to the executable to customize Slack's UI and Zlack's running icons.
-*   **Private WebView2 Runtime (optional)**: On Windows, Zlack uses a private `webview2-runtime` folder next to the executable when present, otherwise it falls back to the shared system WebView2 runtime.
-*   **Smart Context**: Extracts `Team ID` and `Channel ID` from Slack's console logs to ensure notifications take you to the exact right place.
-*   **Background Reliability**: Includes a custom rust backend to ensure clicking a notification properly restores the window from the system tray and focuses it.
-*   **Multi-Workspace Support**: Handles navigation for multiple Slack workspaces via standard webview login.
-*   **Lightweight**: Uses Tauri's minimal footprint (WebView2 on Windows) instead of a full Chromium bundle (Electron).
+<p align="center">
+  <a href="#why-zlack">Why Zlack</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#customize">Customize</a> ·
+  <a href="#development">Development</a> ·
+  <a href="README.ko.md">한국어</a>
+</p>
 
-## 🛠 Tech Stack
+---
 
-*   **Frontend**: Vanilla HTML/JS (Slack Web Client) + `preload.js` for bridge.
-*   **Backend**: Rust (Tauri) for system integration.
-*   **Notification Engine**: `tauri-winrt-notification` for advanced Windows Toast features (Inputs, Activation Callbacks).
+## Why Zlack
 
-## 📦 Installation
+Zlack keeps the familiar Slack web experience and adds the desktop behavior that
+matters: native operating-system integration, dependable notification routing,
+and low-overhead packaging through the system WebView.
 
-Download the installer for your OS:
+|        | Capability               | What it does                                                                                                                                   |
+| ------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **01** | Native notifications     | Routes Slack alerts through Windows toast notifications or the native notification service on macOS/Linux.                                     |
+| **02** | Windows toast activation | Restores a hidden or minimized window and, when Slack supplies channel context, opens the notification's workspace and channel.                |
+| **03** | Unread indicators        | Shows mentions and DMs in red, other unread activity in blue, and mirrors urgent activity in the window title and Windows taskbar.             |
+| **04** | Fast workspace switching | Keeps up to two workspaces warm, adds workspace buttons to Slack's account switcher, and supports <kbd>Ctrl</kbd> + <kbd>1</kbd>–<kbd>9</kbd>. |
+| **05** | Native footprint         | Uses Tauri and the operating system's WebView instead of bundling an entire Electron/Chromium runtime.                                         |
+| **06** | Local customization      | Loads optional CSS, runtime icons, and a private WebView2 runtime from files beside the executable.                                            |
 
-| Platform | File |
-|----------|------|
-| **Windows** | `Zlack_${version}_x64-setup.exe` (installer) or `Zlack_${version}_x64_en-US.msi` |
-| **macOS** | `Zlack_${version}_x64.dmg` |
+## Install
 
-1.  Run the installer.
-2.  Launch **Zlack**.
-3.  Log in to your Slack workspaces.
+Download the latest package from
+[GitHub Releases](https://github.com/sanguneo/zlack/releases/latest), install it,
+then sign in to your Slack workspace.
 
-## 🏗 Development
+| Platform | Packages            | Runtime note                                     |
+| -------- | ------------------- | ------------------------------------------------ |
+| Windows  | `.exe`, `.msi`      | Uses Microsoft Edge WebView2, shared or private. |
+| macOS    | `.dmg`, `.app`      | Uses the system WebKit webview.                  |
+| Linux    | `.deb`, `.AppImage` | Uses the system WebKitGTK stack.                 |
 
-### Prerequisites
+> [!NOTE]
+> On Windows, notification-click activation is most reliable in a packaged
+> release. Development builds are subject to AUMID restrictions.
 
-*   [Node.js](https://nodejs.org/)
-*   [Rust & Cargo](https://rustup.rs/)
-*   [Tauri CLI](https://tauri.app/v1/guides/getting-started/prerequisites)
+## Customize
 
-### Commands
+Place any of these optional files beside `Zlack.exe` (or the Zlack executable on
+your platform):
 
-**Install Dependencies:**
+```text
+Zlack
+├── zlack.css          # CSS injected into the Slack client
+├── zlack.png          # preferred runtime window and tray icon
+├── zlack.ico          # fallback runtime icon
+└── zlack-taskbar.png  # optional Windows taskbar-only icon
+```
+
+The embedded application and installer icons do not change until Zlack is
+rebuilt.
+
+### Private WebView2 runtime on Windows
+
+The default Windows setup uses the shared system WebView2 runtime. To isolate
+Zlack from that shared installation:
+
+1. Download a **Fixed Version** runtime from
+   [Microsoft's WebView2 page](https://developer.microsoft.com/microsoft-edge/webview2/).
+2. Extract it into a `webview2-runtime` directory beside `Zlack.exe`.
+3. Confirm that the executable exists at
+   `webview2-runtime/msedgewebview2.exe`.
+
+```text
+Zlack.exe
+└── webview2-runtime/
+    ├── msedgewebview2.exe
+    └── ...
+```
+
+Unless `WEBVIEW2_BROWSER_EXECUTABLE_FOLDER` is already set, Zlack uses the
+private runtime when present and falls back to the shared runtime otherwise.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A["Slack web client"] --> B["preload.js bridge"]
+    B -->|"notification + channel context"| C["Tauri / Rust core"]
+    B -->|"unread + workspace state"| C
+    C --> D["Native notification"]
+    C --> E["Tray, title, and taskbar badges"]
+    C --> F["Windows activation and channel navigation"]
+```
+
+The preload bridge observes Slack's notification telemetry and unread state,
+then sends only the required context to the Rust core. The native layer owns
+notification delivery, system tray behavior, workspace windows, window focus,
+and external-link handling.
+
+### Security boundaries
+
+- Remote Tauri IPC is scoped to Slack domains and Zlack-managed workspace
+  windows. New workspace windows accept only credential-free HTTPS URLs on
+  `slack.com` and its subdomains.
+- Zlack's external-link command accepts only credential-free HTTP(S) URLs and
+  rejects file and custom protocols.
+- The remote Slack page receives neither Tauri's general shell capability nor
+  its built-in notification API. Native alerts use Zlack's narrow notification
+  command instead.
+
+## Development
+
+### Requirements
+
+- [Node.js 18 or newer](https://nodejs.org/)
+- [Rust and Cargo](https://rustup.rs/)
+- [Tauri 1 system prerequisites](https://tauri.app/v1/guides/getting-started/prerequisites)
+
+### Run locally
+
 ```bash
 npm install
-```
-
-**Run in Development Mode:**
-```bash
 npm run tauri dev
 ```
-*Note: In `dev` mode, clicking notifications may not reliably restore the window due to Windows AUMID restrictions. This works fully in the built release.*
 
-**Build for Production (Windows):**
-```bash
-npm run build:dist:windows
-```
-This will compile the application and place the installer (`.exe` and `.msi`) into the `dists/` folder.
+The `pretauri` hook synchronizes the version from `package.json` into the Rust
+and Tauri manifests before each Tauri command.
 
-**Build for Production (macOS/Linux):**
-```bash
-npm run build:dist:unix
-```
-This requires running on a Mac or Linux machine. It will generate `.dmg`/`.app` (macOS) or `.deb`/`.AppImage` (Linux) in the `dists/` folder.
+### Build distributables
 
-**Optional private WebView2 runtime (Windows):**
+| Host    | Command                      | Output copied to `dists/` |
+| ------- | ---------------------------- | ------------------------- |
+| Windows | `npm run build:dist:windows` | NSIS `.exe`, WiX `.msi`   |
+| macOS   | `npm run build:dist:unix`    | `.dmg`, `.app`            |
+| Linux   | `npm run build:dist:unix`    | `.deb`, `.AppImage`       |
 
-By default Zlack uses the shared, system-wide WebView2 runtime. Because that runtime is shared, allowing it through a software firewall effectively allows *any* app to reach the internet through it.
-
-To use a private runtime instead, get the **Fixed Version** WebView2 runtime for your architecture from the [WebView2 download page](https://developer.microsoft.com/microsoft-edge/webview2/), extract it, and place it next to `Zlack.exe` as:
+### Project map
 
 ```text
-Zlack.exe
-webview2-runtime/
-  msedgewebview2.exe
-  ...
+src/
+└── index.html              # bundled fallback splash
+src-tauri/
+├── preload.js              # Slack-to-Tauri bridge
+├── src/
+│   ├── main.rs             # app lifecycle and workspace orchestration
+│   ├── icons.rs            # runtime and unread badge icons
+│   ├── platform.rs         # platform notification/runtime integration
+│   └── security.rs         # URL and external-link boundaries
+├── Cargo.toml
+└── tauri.conf.json
+scripts/
+└── update-version.js       # manifest version synchronization
 ```
 
-If `webview2-runtime/msedgewebview2.exe` exists, Zlack uses it. Otherwise, it falls back to the shared system runtime.
+## Contributing
 
-## 🎨 Customization
+Issues and focused pull requests are welcome. For behavior changes, describe
+the target platform and include steps that reproduce the current behavior.
 
-Place optional customization files next to `Zlack.exe`:
+- [Open an issue](https://github.com/sanguneo/zlack/issues)
+- [Read the changelog](CHANGELOG.md)
 
-```text
-Zlack.exe
-zlack.css          # injected into Slack
-zlack.png          # preferred custom running icon
-zlack.ico          # fallback custom running icon
-zlack-taskbar.png  # optional Windows taskbar-only override
-```
+## License
 
-The custom icon is used for the window, taskbar, and tray badge base. If `zlack-taskbar.png` exists, it overrides only the Windows taskbar icon. The embedded exe/installer icon remains fixed until rebuilt.
+Zlack is available under the [MIT License](LICENSE).
 
-## 🧩 How It Works
-
-### Notification Interception
-Slack's web client sends telemetry traces to `/traces/v1/list_of_spans`. Zlack's `preload.js` intercepts this network traffic:
-1.  Captures `notification:sent` spans to reliably identify the `Team ID` and `Channel ID` associated with the event.
-2.  Intercepts the browser's `Notification` API request.
-3.  Merges the content with the captured network context and sends it to the Rust backend.
-
-### Robust Window Restoration
-Clicking a notification on Windows while an app is minimized is notoriously tricky due to OS foreground rules. Zlack solves this by:
-1.  **Main Thread Architecture**: Creates notification objects directly on the main thread to ensure proper COM listener persistence.
-2.  **Staged Restoration**: Explicitly calls `set_skip_taskbar(false)`, `unminimize()`, and `show()` in the correct order.
-3.  **Focus Hack**: Uses a temporary "Always On Top" toggle to force the window into the foreground even if Windows tries to suppress it.
-
-## 📄 License
-
-MIT
+Slack is a trademark of Salesforce, Inc. Zlack is an independent project and is
+not affiliated with or endorsed by Slack or Salesforce.
