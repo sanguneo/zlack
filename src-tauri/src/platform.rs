@@ -2,7 +2,7 @@
 use std::path::PathBuf;
 
 #[cfg(not(target_os = "windows"))]
-use tauri::api::notification::Notification;
+use notify_rust::Notification;
 
 #[cfg(target_os = "windows")]
 use tauri_winrt_notification::{Duration, Sound, Toast};
@@ -145,12 +145,8 @@ pub(crate) fn notify(
 
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = (&team_id, &channel_id);
-        let identifier = app_handle.config().tauri.bundle.identifier.clone();
+        let _ = (&app_handle, &team_id, &channel_id);
 
-        let _ = Notification::new(&identifier)
-            .title(title)
-            .body(body)
-            .show();
+        let _ = Notification::new().summary(&title).body(&body).show();
     }
 }

@@ -16,6 +16,7 @@ use tauri::{
 
 mod icons;
 mod platform;
+mod security;
 
 pub(crate) fn exe_sibling(name: &str) -> Option<PathBuf> {
     std::env::current_exe()
@@ -333,23 +334,20 @@ fn create_workspace_window(
             format!("https://app.slack.com/client/{}", team)
         }
     });
-    if let Some(domain) = target_url
-        .split("://")
-        .nth(1)
-        .and_then(|rest| rest.split('/').next())
-    {
-        if domain.ends_with("slack.com") {
-            app.ipc_scope().configure_remote_access(
-                RemoteDomainAccessScope::new(domain)
-                    .add_window(label)
-                    .enable_tauri_api(),
-            );
-        }
+    let target_url = security::parse_slack_url(&target_url).ok_or(
+        tauri::Error::InvalidWindowUrl("workspace URLs must use HTTPS on slack.com"),
+    )?;
+    if let Some(domain) = target_url.host_str() {
+        app.ipc_scope().configure_remote_access(
+            RemoteDomainAccessScope::new(domain)
+                .add_window(label)
+                .enable_tauri_api(),
+        );
     }
     let window = tauri::WindowBuilder::new(
         app,
         label,
-        tauri::WindowUrl::External(target_url.parse().unwrap()),
+        tauri::WindowUrl::External(target_url),
     )
     .additional_browser_args("--disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding")
     .user_agent(user_agent())
@@ -906,6 +904,7 @@ fn main() {
     .invoke_handler(tauri::generate_handler![
       platform::notify,
       load_user_css,
+      security::open_external_url,
       update_badge,
       update_workspace_meta,
       workspace_status,

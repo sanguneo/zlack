@@ -1379,7 +1379,7 @@ window.open = function(url, target, features) {
     }
 
     if (zlackIsHttpUrl(parsed) && !zlackIsSlackUrl(parsed)) {
-        if (window.__TAURI__) window.__TAURI__.shell.open(parsed.href);
+        tauriInvoke('open_external_url', { url: parsed.href }).catch(() => {});
         return null;
     }
 
@@ -1397,7 +1397,7 @@ document.addEventListener('click', (e) => {
     if (isExternal) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        if (window.__TAURI__) window.__TAURI__.shell.open(parsed.href);
+        tauriInvoke('open_external_url', { url: parsed.href }).catch(() => {});
         return;
     }
 
