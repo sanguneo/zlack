@@ -3,6 +3,12 @@
 </p>
 
 <p align="center">
+  <img src="src-tauri/icons/128x128.png" width="96" height="96" alt="Zlack 앱 아이콘">
+</p>
+
+<h1 align="center">Zlack</h1>
+
+<p align="center">
   <strong>Tauri로 만든, 핵심에 집중한 Slack 데스크톱 클라이언트.</strong><br>
   전체 Chromium 번들 없이 네이티브 알림과 안정적인 창 복원,<br>
   빠른 멀티 워크스페이스 전환을 제공합니다.

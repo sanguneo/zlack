@@ -3,6 +3,12 @@
 </p>
 
 <p align="center">
+  <img src="src-tauri/icons/128x128.png" width="96" height="96" alt="Zlack app icon">
+</p>
+
+<h1 align="center">Zlack</h1>
+
+<p align="center">
   <strong>A focused Slack desktop client powered by Tauri.</strong><br>
   Native notifications, reliable window restoration, and multi-workspace switching<br>
   without shipping a full Chromium bundle.
