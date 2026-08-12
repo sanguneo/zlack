@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="src-tauri/icons/128x128.png" width="112" height="112" alt="Zlack app icon">
+  <img src="assets/zlack-cover.png" width="1280" alt="Zlack — Slack, without the weight. Fast workspaces, native notifications, and no bundled Chromium runtime.">
 </p>
-
-<h1 align="center">Zlack</h1>
 
 <p align="center">
   <strong>A focused Slack desktop client powered by Tauri.</strong><br>

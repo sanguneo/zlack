@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="src-tauri/icons/128x128.png" width="112" height="112" alt="Zlack 앱 아이콘">
+  <img src="assets/zlack-cover.png" width="1280" alt="Zlack — 무거움 없이 쓰는 Slack. 빠른 워크스페이스 전환과 네이티브 알림을 제공하며 Chromium 런타임을 포함하지 않습니다.">
 </p>
-
-<h1 align="center">Zlack</h1>
 
 <p align="center">
   <strong>Tauri로 만든, 핵심에 집중한 Slack 데스크톱 클라이언트.</strong><br>

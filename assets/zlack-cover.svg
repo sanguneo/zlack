@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title description">
+  <title id="title">Zlack — Slack, without the weight.</title>
+  <description id="description">A deep aubergine poster with a luminous Z-shaped path moving through lightweight desktop windows.</description>
+  <defs>
+    <linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#36C5F0"/>
+      <stop offset=".34" stop-color="#F4EDE4"/>
+      <stop offset=".67" stop-color="#ECB22E"/>
+      <stop offset="1" stop-color="#2EB67D"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7D527F" stop-opacity=".42"/>
+      <stop offset="1" stop-color="#210A22" stop-opacity=".58"/>
+    </linearGradient>
+    <radialGradient id="halo" cx=".72" cy=".48" r=".52">
+      <stop offset="0" stop-color="#9B6A9D" stop-opacity=".34"/>
+      <stop offset=".62" stop-color="#4A154B" stop-opacity=".08"/>
+      <stop offset="1" stop-color="#240A25" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#150515" flood-opacity=".48"/>
+    </filter>
+    <filter id="softGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".82" numOctaves="3" seed="17" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncA type="table" tableValues="0 .055"/>
+      </feComponentTransfer>
+    </filter>
+    <clipPath id="canvas">
+      <rect width="1280" height="640" rx="0"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#canvas)">
+    <rect width="1280" height="640" fill="#341035"/>
+    <rect width="1280" height="640" fill="url(#halo)"/>
+    <circle cx="1178" cy="70" r="240" fill="#5D255F" opacity=".18"/>
+    <circle cx="676" cy="650" r="310" fill="#1D071E" opacity=".34"/>
+
+    <g opacity=".18" stroke="#F4EDE4" stroke-width="1">
+      <path d="M64 94H1216"/>
+      <path d="M64 546H1216"/>
+      <path d="M640 64V576" stroke-dasharray="3 14"/>
+    </g>
+
+    <g transform="translate(82 82)">
+      <g transform="translate(0 1)">
+        <circle cx="13" cy="13" r="12" fill="#F4EDE4"/>
+        <path d="M7 7h12L9 19h12" fill="none" stroke="#4A154B" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+      <text x="40" y="19" fill="#D7C7D7" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="2.8">NATIVE DESKTOP · OPEN SOURCE</text>
+    </g>
+
+    <g transform="translate(82 178)">
+      <text x="0" y="92" fill="#F8F3ED" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="112" font-weight="900" letter-spacing="-6">ZLACK</text>
+      <rect x="2" y="121" width="70" height="5" rx="2.5" fill="#36C5F0"/>
+      <rect x="80" y="121" width="70" height="5" rx="2.5" fill="#E01E5A"/>
+      <rect x="158" y="121" width="70" height="5" rx="2.5" fill="#ECB22E"/>
+      <rect x="236" y="121" width="70" height="5" rx="2.5" fill="#2EB67D"/>
+      <text x="0" y="177" fill="#F4EDE4" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="30" font-weight="550" letter-spacing="-.4">Slack, without the weight.</text>
+      <text x="1" y="221" fill="#BFA9C0" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="17" font-weight="500" letter-spacing=".3">Fast workspaces. Native notifications. Zero Chromium bundle.</text>
+    </g>
+
+    <g transform="translate(82 486)" font-family="Inter, Segoe UI, Arial, sans-serif">
+      <g>
+        <circle cx="8" cy="8" r="8" fill="#36C5F0"/>
+        <path d="M4.5 8l2.2 2.2L11.8 5" fill="none" stroke="#341035" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="25" y="13" fill="#D7C7D7" font-size="14" font-weight="650" letter-spacing=".8">WINDOWS</text>
+      </g>
+      <g transform="translate(122 0)">
+        <circle cx="8" cy="8" r="8" fill="#ECB22E"/>
+        <path d="M4.5 8l2.2 2.2L11.8 5" fill="none" stroke="#341035" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="25" y="13" fill="#D7C7D7" font-size="14" font-weight="650" letter-spacing=".8">MACOS</text>
+      </g>
+      <g transform="translate(226 0)">
+        <circle cx="8" cy="8" r="8" fill="#2EB67D"/>
+        <path d="M4.5 8l2.2 2.2L11.8 5" fill="none" stroke="#341035" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="25" y="13" fill="#D7C7D7" font-size="14" font-weight="650" letter-spacing=".8">LINUX</text>
+      </g>
+    </g>
+
+    <g filter="url(#shadow)">
+      <g transform="translate(750 112) rotate(4 184 120)">
+        <rect width="368" height="240" rx="22" fill="url(#panel)" stroke="#C9AACA" stroke-opacity=".34" stroke-width="1.5"/>
+        <rect x="1" y="1" width="366" height="44" rx="21" fill="#8C5B8F" opacity=".2"/>
+        <circle cx="24" cy="23" r="4.5" fill="#E01E5A"/>
+        <circle cx="41" cy="23" r="4.5" fill="#ECB22E"/>
+        <circle cx="58" cy="23" r="4.5" fill="#2EB67D"/>
+        <rect x="26" y="74" width="98" height="12" rx="6" fill="#F4EDE4" opacity=".3"/>
+        <rect x="26" y="102" width="184" height="9" rx="4.5" fill="#F4EDE4" opacity=".13"/>
+        <rect x="26" y="122" width="144" height="9" rx="4.5" fill="#F4EDE4" opacity=".1"/>
+      </g>
+      <g transform="translate(687 259) rotate(-5 201 129)">
+        <rect width="402" height="258" rx="24" fill="#4D1B4F" stroke="#F4EDE4" stroke-opacity=".38" stroke-width="1.5"/>
+        <rect x="1" y="1" width="400" height="48" rx="23" fill="#F4EDE4" opacity=".07"/>
+        <circle cx="27" cy="25" r="5" fill="#E01E5A"/>
+        <circle cx="46" cy="25" r="5" fill="#ECB22E"/>
+        <circle cx="65" cy="25" r="5" fill="#2EB67D"/>
+        <rect x="28" y="83" width="48" height="48" rx="13" fill="#36C5F0" opacity=".86"/>
+        <path d="M41 106h22M52 95v22" stroke="#341035" stroke-width="4" stroke-linecap="round"/>
+        <rect x="96" y="84" width="131" height="13" rx="6.5" fill="#F4EDE4" opacity=".46"/>
+        <rect x="96" y="108" width="236" height="9" rx="4.5" fill="#F4EDE4" opacity=".16"/>
+        <rect x="28" y="158" width="321" height="12" rx="6" fill="#F4EDE4" opacity=".13"/>
+        <rect x="28" y="184" width="277" height="12" rx="6" fill="#F4EDE4" opacity=".1"/>
+        <rect x="28" y="210" width="182" height="12" rx="6" fill="#F4EDE4" opacity=".08"/>
+      </g>
+      <g transform="translate(1018 352) rotate(8 92 69)">
+        <rect width="184" height="138" rx="20" fill="#F4EDE4"/>
+        <circle cx="35" cy="38" r="14" fill="#E01E5A"/>
+        <path d="M31 38h8M35 34v8" stroke="#F4EDE4" stroke-width="2.5" stroke-linecap="round"/>
+        <rect x="60" y="29" width="90" height="10" rx="5" fill="#4A154B" opacity=".74"/>
+        <rect x="60" y="49" width="66" height="8" rx="4" fill="#4A154B" opacity=".28"/>
+        <rect x="28" y="84" width="126" height="8" rx="4" fill="#4A154B" opacity=".18"/>
+        <rect x="28" y="104" width="94" height="8" rx="4" fill="#4A154B" opacity=".13"/>
+      </g>
+    </g>
+
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M692 174 C790 136 990 142 1132 174 L762 458 C866 488 1034 492 1160 451" stroke="#1B071C" stroke-opacity=".55" stroke-width="36"/>
+      <path d="M692 174 C790 136 990 142 1132 174 L762 458 C866 488 1034 492 1160 451" stroke="url(#ribbon)" stroke-width="18" filter="url(#softGlow)"/>
+      <path d="M692 174 C790 136 990 142 1132 174 L762 458 C866 488 1034 492 1160 451" stroke="#FFFFFF" stroke-opacity=".62" stroke-width="3"/>
+    </g>
+
+    <g>
+      <circle cx="692" cy="174" r="11" fill="#36C5F0" stroke="#F4EDE4" stroke-width="4"/>
+      <circle cx="1132" cy="174" r="11" fill="#E01E5A" stroke="#F4EDE4" stroke-width="4"/>
+      <circle cx="762" cy="458" r="11" fill="#ECB22E" stroke="#F4EDE4" stroke-width="4"/>
+      <circle cx="1160" cy="451" r="11" fill="#2EB67D" stroke="#F4EDE4" stroke-width="4"/>
+      <circle cx="1187" cy="420" r="5" fill="#F4EDE4" opacity=".72"/>
+      <circle cx="1208" cy="393" r="3" fill="#F4EDE4" opacity=".42"/>
+      <circle cx="672" cy="145" r="4" fill="#F4EDE4" opacity=".58"/>
+    </g>
+
+    <rect width="1280" height="640" filter="url(#grain)" opacity=".55"/>
+  </g>
+</svg>
