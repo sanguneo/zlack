@@ -1,8 +1,4 @@
 <p align="center">
-  <img src="assets/zlack-cover.png" width="1280" alt="Zlack — Slack, without the weight. Fast workspaces, native notifications, and no bundled Chromium runtime.">
-</p>
-
-<p align="center">
   <img src="src-tauri/icons/128x128.png" width="96" height="96" alt="Zlack app icon">
 </p>
 

@@ -1,8 +1,4 @@
 <p align="center">
-  <img src="assets/zlack-cover.png" width="1280" alt="Zlack — 무거움 없이 쓰는 Slack. 빠른 워크스페이스 전환과 네이티브 알림을 제공하며 Chromium 런타임을 포함하지 않습니다.">
-</p>
-
-<p align="center">
   <img src="src-tauri/icons/128x128.png" width="96" height="96" alt="Zlack 앱 아이콘">
 </p>
 
