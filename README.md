@@ -36,7 +36,7 @@ and low-overhead packaging through the system WebView.
 |        | Capability               | What it does                                                                                                                                   |
 | ------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | **01** | Native notifications     | Routes Slack alerts through Windows toast notifications or the native notification service on macOS/Linux.                                     |
-| **02** | Windows toast activation | Restores a hidden or minimized window and, when Slack supplies channel context, opens the notification's workspace and channel.                |
+| **02** | Native click activation  | Restores the originating workspace and hands the click back to Slack for in-app DM or channel routing without a full-page reload.              |
 | **03** | Unread indicators        | Shows mentions and DMs in red, other unread activity in blue, and mirrors urgent activity in the window title and Windows taskbar.             |
 | **04** | Fast workspace switching | Keeps up to two workspaces warm, adds workspace buttons to Slack's account switcher, and supports <kbd>Ctrl</kbd> + <kbd>1</kbd>–<kbd>9</kbd>. |
 | **05** | Native footprint         | Uses Tauri and the operating system's WebView instead of bundling an entire Electron/Chromium runtime.                                         |
@@ -55,8 +55,9 @@ then sign in to your Slack workspace.
 | Linux    | `.deb`, `.AppImage` | Uses the system WebKitGTK stack.                 |
 
 > [!NOTE]
-> On Windows, notification-click activation is most reliable in a packaged
-> release. Development builds are subject to AUMID restrictions.
+> Notification-click activation depends on the platform notification service
+> supporting click actions. On Windows, packaged releases avoid the AUMID
+> restrictions that apply to development builds.
 
 ## Customize
 
@@ -104,7 +105,7 @@ flowchart LR
     B -->|"unread + workspace state"| C
     C --> D["Native notification"]
     C --> E["Tray, title, and taskbar badges"]
-    C --> F["Windows activation and channel navigation"]
+    C --> F["Native activation and channel navigation"]
 ```
 
 The preload bridge observes Slack's notification telemetry and unread state,

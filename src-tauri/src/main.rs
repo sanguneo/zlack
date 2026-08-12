@@ -15,6 +15,8 @@ use tauri::{
 };
 
 mod icons;
+mod native_notifications;
+mod notifications;
 mod platform;
 mod security;
 
@@ -355,7 +357,11 @@ fn create_workspace_window(
     .inner_size(1200.0, 800.0)
     .resizable(true)
     .visible(visible)
-    .initialization_script(include_str!("../preload.js"))
+    .initialization_script(concat!(
+        include_str!("../notification-bridge.cjs"),
+        "\n",
+        include_str!("../preload.js")
+    ))
     .disable_file_drop_handler()
     .icon(icons::ICON_WINDOW.clone())?
     .build()?;
@@ -455,7 +461,7 @@ fn sync_hidden_workspace_geometry(app: &tauri::AppHandle, source: &tauri::Window
     }
 }
 
-fn switch_to_workspace(app: &tauri::AppHandle, team: &str, url: Option<String>) {
+pub(crate) fn switch_to_workspace(app: &tauri::AppHandle, team: &str, url: Option<String>) {
     let target_label = match ensure_workspace_window(app, team, url.clone()) {
         Some(label) => label,
         None => return,
@@ -535,6 +541,23 @@ fn switch_to_workspace(app: &tauri::AppHandle, team: &str, url: Option<String>) 
     sync_hidden_workspace_geometry(app, &target);
     evict_loaded_workspaces(app);
     emit_workspace_status(app);
+}
+
+pub(crate) fn focus_workspace_label(app: &tauri::AppHandle, label: &str) -> Option<tauri::Window> {
+    let team = {
+        let state = app.state::<Mutex<WorkspaceState>>();
+        let state = state.lock().unwrap();
+        state.team_by_label.get(label).cloned()
+    };
+
+    if let Some(team) = team {
+        switch_to_workspace(app, &team, None);
+        return app.get_window(label);
+    }
+
+    let window = app.get_window(label)?;
+    restore_window(&window);
+    Some(window)
 }
 
 fn trimmed_non_empty(value: Option<String>) -> Option<String> {
@@ -886,7 +909,11 @@ fn main() {
       .inner_size(1200.0, 800.0)
       .resizable(true)
       .maximized(start_maximized)
-      .initialization_script(include_str!("../preload.js"))
+      .initialization_script(concat!(
+        include_str!("../notification-bridge.cjs"),
+        "\n",
+        include_str!("../preload.js")
+      ))
       .disable_file_drop_handler()
       .icon(icons::ICON_WINDOW.clone())?
       .build()?;
@@ -902,7 +929,8 @@ fn main() {
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
-      platform::notify,
+      native_notifications::notify,
+      native_notifications::update_notification_context,
       load_user_css,
       security::open_external_url,
       update_badge,

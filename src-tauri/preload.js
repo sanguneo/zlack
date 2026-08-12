@@ -37,15 +37,25 @@ navigator.permissions.query = (parameters) => {
 
 
 // 2.5 Intercept Network Requests (Telemetry) for Notification Context
-let lastEventContext = { teamId: 'unknown', channelId: 'unknown', ts: 0 };
-// Correlation rules for attaching channel context to a notification:
-//   - every telemetry capture stamps lastEventContext.ts (Date.now()).
-//   - a notification only adopts the context if it was captured within
-//     CONTEXT_FRESHNESS_MS before (or NOTIFY_DELAY_MS after) the notification.
-//   This prevents a channel-less notification from inheriting a previous
-//   notification's team/channel (the old fixed-snapshot bug).
-const NOTIFY_DELAY_MS = 500;       // grace period for a slightly-delayed telemetry beacon
-const CONTEXT_FRESHNESS_MS = 5000; // max age of context still considered "this notification's"
+const NOTIFY_DELAY_MS = 500;
+const NOTIFICATION_RETENTION_MS = 10 * 60 * 1000;
+const notificationCoordinator =
+    window.__ZlackNotificationBridge.createNotificationCoordinator({
+        contextFreshnessMs: 5000,
+        contextFutureMs: 5000,
+    });
+const nativeNotificationCommands =
+    window.__ZlackNotificationBridge.createNativeNotificationCommands(tauriInvoke);
+let notificationContextReconcileTimer = null;
+
+function scheduleForcedNotificationContextReconcile() {
+    clearTimeout(notificationContextReconcileTimer);
+    notificationContextReconcileTimer = setTimeout(() => {
+        notificationCoordinator.reconcileContexts(true).catch((error) => {
+            console.error('Zlack: Failed to finalize notification context', error);
+        });
+    }, NOTIFY_DELAY_MS);
+}
 
 
 function processTelemetryBody(bodyStr) {
@@ -67,12 +77,17 @@ function processTelemetryBody(bodyStr) {
                 });
 
                 if (tid && cid) {
-                    lastEventContext.teamId = tid;
-                    lastEventContext.channelId = cid;
-                    lastEventContext.ts = Date.now();
+                    notificationCoordinator.recordContext({
+                        teamId: tid,
+                        channelId: cid,
+                    });
                 }
             }
         });
+        notificationCoordinator.reconcileContexts().catch((error) => {
+            console.error('Zlack: Failed to correlate notification context', error);
+        });
+        scheduleForcedNotificationContextReconcile();
     } catch (e) {
         // Ignore JSON parse errors or other issues
     }
@@ -162,62 +177,33 @@ XMLHttpRequest.prototype.send = function(body) {
 
 
 // 3. Shim Notification API
-const ZlackNotification = class {
-  constructor(title, options, ...args) {
-    this.title = title;
-    this.options = options || {};
-    this.clickHandlers = [];
-    
-    // Store as global pending notification
-    window.__ZlackPendingNotification = this;
+const ZlackNotification =
+    window.__ZlackNotificationBridge.createNotificationClass({
+        coordinator: notificationCoordinator,
+        contextDelayMs: NOTIFY_DELAY_MS,
+        retentionMs: NOTIFICATION_RETENTION_MS,
+        showNative: nativeNotificationCommands.showNative,
+        updateNativeContext: nativeNotificationCommands.updateNativeContext,
+        logError: (...args) => console.error(...args),
+    });
 
-    const createdAt = Date.now();
-    const originalBody = this.options.body || '';
-    const notifyTitle = typeof title === 'string' ? title : 'New Message';
-
-    try {
-      if (window.__TAURI__) {
-          // Wait briefly so a slightly-delayed telemetry beacon can still land,
-          // then only adopt the captured context if it belongs to THIS notification.
-          setTimeout(() => {
-              const age = createdAt - lastEventContext.ts; // >0 captured before, <0 after
-              const fresh = lastEventContext.ts > 0
-                  && age <= CONTEXT_FRESHNESS_MS
-                  && age >= -NOTIFY_DELAY_MS;
-              const teamId = fresh ? (lastEventContext.teamId || 'unknown') : 'unknown';
-              const channelId = fresh ? (lastEventContext.channelId || 'unknown') : 'unknown';
-
-              tauriInvoke('notify', {
-                title: notifyTitle,
-                body: originalBody,
-                teamId: teamId,
-                channelId: channelId
-              }).catch(() => {});
-          }, NOTIFY_DELAY_MS);
-      }
-    } catch (_) {}
-  }
-
-  static get permission() { return "granted"; }
-  static requestPermission(cb) {
-    if (cb) cb("granted");
-    return Promise.resolve("granted");
-  }
-
-  // Support addEventListener for 'click' (dummy mostly, as we rely on native focus)
-  addEventListener(type, listener) {
-    if (type === 'click' && typeof listener === 'function') {
-        this.clickHandlers.push(listener);
+window.__ZlackActivateNotification = function(payload) {
+    if (notificationCoordinator.activateNotification(payload || {})) {
+        return true;
     }
-  }
-  
-  removeEventListener(type, listener) {
-    if (type === 'click') {
-        this.clickHandlers = this.clickHandlers.filter(l => l !== listener);
-    }
-  }
 
-  close() {}
+    const teamId = payload && payload.teamId;
+    const channelId = payload && payload.channelId;
+    if (!teamId || teamId === 'unknown') return false;
+
+    const encodedTeam = encodeURIComponent(teamId);
+    const url = channelId && channelId !== 'unknown'
+        ? `https://app.slack.com/client/${encodedTeam}/${encodeURIComponent(channelId)}`
+        : `https://app.slack.com/client/${encodedTeam}`;
+    tauriInvoke('switch_workspace', { team: teamId, url }).catch((error) => {
+        console.error('Zlack: Notification fallback navigation failed', error);
+    });
+    return false;
 };
 
 // Force the shim to stay
@@ -226,6 +212,9 @@ Object.defineProperty(window, 'Notification', {
     writable: false,
     configurable: false
 });
+setTimeout(() => {
+    window.__ZlackNotificationBridge.restoreNotificationPermission(ZlackNotification);
+}, 0);
 
 
 // 3.5 Unread / mention badge bridge -> native tray icon + window title.

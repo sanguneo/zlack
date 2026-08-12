@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-08-12
+
+### Added
+
+- **Cross-platform notification activation**: macOS notification clicks and Linux default actions now restore the originating workspace and use the same activation bridge as Windows.
+
+### Fixed
+
+- **In-app notification routing**: Native notification clicks are delivered back to the matching Slack `Notification` object, allowing Slack to perform its own DM/channel transition instead of forcing a full-page URL navigation.
+- **Concurrent notification context**: Telemetry contexts and notifications are matched one-to-one by event order and time, preventing overlapping alerts from reusing or stealing another alert's team/channel target.
+- **Desktop notification startup**: Notification permission and native IPC are resolved after Tauri initializes, preventing Slack alerts from being silently skipped on Windows.
+
 ## [1.3.2] - 2026-08-11
 
 ### Security
