@@ -2,7 +2,7 @@
 use std::path::PathBuf;
 
 #[cfg(target_os = "windows")]
-const WINDOWS_DEFAULT_DOWNLOAD_FOLDER_NAME: &str = "Desktop";
+const WINDOWS_DEFAULT_DOWNLOAD_FOLDER_NAME: &str = "Downloads";
 
 #[cfg(target_os = "windows")]
 pub(crate) fn prefer_private_webview2_runtime() {
@@ -20,24 +20,24 @@ pub(crate) fn prefer_private_webview2_runtime() {
 pub(crate) fn prefer_private_webview2_runtime() {}
 
 #[cfg(target_os = "windows")]
-fn windows_desktop_dir() -> Option<PathBuf> {
+fn windows_downloads_dir() -> Option<PathBuf> {
     use windows::Win32::{
         Foundation::HANDLE,
         System::Com::CoTaskMemFree,
-        UI::Shell::{FOLDERID_Desktop, SHGetKnownFolderPath, KF_FLAG_DEFAULT},
+        UI::Shell::{FOLDERID_Downloads, SHGetKnownFolderPath, KF_FLAG_DEFAULT},
     };
 
     unsafe {
-        let path = SHGetKnownFolderPath(&FOLDERID_Desktop, KF_FLAG_DEFAULT, HANDLE(0)).ok()?;
-        let desktop = path.to_string().ok().map(PathBuf::from);
+        let path = SHGetKnownFolderPath(&FOLDERID_Downloads, KF_FLAG_DEFAULT, HANDLE(0)).ok()?;
+        let downloads = path.to_string().ok().map(PathBuf::from);
         CoTaskMemFree(Some(path.as_ptr() as _));
-        desktop
+        downloads
     }
 }
 
 #[cfg(target_os = "windows")]
 fn windows_default_download_dir() -> PathBuf {
-    windows_desktop_dir()
+    windows_downloads_dir()
         .or_else(|| {
             std::env::var_os("USERPROFILE")
                 .map(PathBuf::from)
