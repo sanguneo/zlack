@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Right-click image download**: Right-clicking an image in Slack now shows a **Save image** menu that fetches the image with the session's own cookies — so authenticated `files.slack.com` images save correctly — writes it to the Downloads folder, and confirms with an **Image saved** notification. The save is routed through the native layer, so it also works on macOS/Linux, where the WebView's own download path did nothing.
+
+### Fixed
+
+- **Default download folder**: Windows now targets the real Downloads folder (`FOLDERID_Downloads`) for WebView2 downloads instead of the Desktop.
+
 ## [1.4.0] - 2026-08-12
 
 ### Added
