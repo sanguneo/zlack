@@ -1398,5 +1398,155 @@ document.addEventListener('click', (e) => {
 }, true); // Capture phase to ensure we get it before Slack
 
 
+// 5. Right-click "Save image".
+// Slack layers its own handlers over images, so the WebView's native "Save
+// image as" is unreliable — and on macOS/Linux the WebView download path often
+// does nothing at all. We fetch the image inside the page (so authenticated
+// files.slack.com cookies apply), then hand the bytes to Rust, which writes
+// them to the Downloads folder and shows a "saved" toast.
+(function setupImageSaveMenu() {
+    const MENU_ID = 'zlack-image-context-menu';
+    const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|svg|avif|ico|tiff?)(\?|#|$)/i;
+
+    function backgroundImageUrl(el) {
+        const inline = el.style && el.style.backgroundImage;
+        const bg = inline && inline !== 'none'
+            ? inline
+            : (el.ownerDocument.defaultView || window).getComputedStyle(el).backgroundImage;
+        if (!bg || bg === 'none') return null;
+        const match = bg.match(/url\((['"]?)(.*?)\1\)/);
+        return match && match[2] ? match[2] : null;
+    }
+
+    function imageUrlFromTarget(target) {
+        if (!target || !target.closest) return null;
+        const img = target.closest('img');
+        if (img && (img.currentSrc || img.getAttribute('src'))) return img.currentSrc || img.src;
+        let el = target;
+        for (let depth = 0; el && el.nodeType === 1 && depth < 5; el = el.parentElement, depth++) {
+            const url = backgroundImageUrl(el);
+            if (url) return url;
+        }
+        const anchor = target.closest('a[href]');
+        if (anchor && IMAGE_EXT_RE.test(anchor.href)) return anchor.href;
+        return null;
+    }
+
+    function filenameFromUrl(url) {
+        try {
+            const parsed = new URL(url, window.location.href);
+            return decodeURIComponent(parsed.pathname.split('/').filter(Boolean).pop() || '');
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function onDismissPointer(event) {
+        if (!event.target || !event.target.closest || !event.target.closest('#' + MENU_ID)) removeMenu();
+    }
+
+    function onDismissKey(event) {
+        if (event.key === 'Escape') removeMenu();
+    }
+
+    function removeMenu() {
+        const existing = document.getElementById(MENU_ID);
+        if (existing) existing.remove();
+        document.removeEventListener('pointerdown', onDismissPointer, true);
+        document.removeEventListener('keydown', onDismissKey, true);
+        document.removeEventListener('scroll', removeMenu, true);
+        window.removeEventListener('blur', removeMenu, true);
+    }
+
+    function toBase64(bytes) {
+        let binary = '';
+        const chunk = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunk) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+        }
+        return btoa(binary);
+    }
+
+    async function saveImage(url) {
+        const fetchImpl = typeof originalFetch === 'function' ? originalFetch : window.fetch;
+        const response = await fetchImpl(url, { credentials: 'include', cache: 'no-store' });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const blob = await response.blob();
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        if (!bytes.length) throw new Error('empty image');
+        return tauriInvoke('save_image', {
+            filename: filenameFromUrl(url),
+            mime: blob.type || '',
+            dataBase64: toBase64(bytes),
+        });
+    }
+
+    function buildMenu(x, y, url) {
+        removeMenu();
+        const menu = document.createElement('div');
+        menu.id = MENU_ID;
+        Object.assign(menu.style, {
+            position: 'fixed',
+            zIndex: '2147483647',
+            minWidth: '160px',
+            padding: '4px',
+            borderRadius: '8px',
+            background: '#1a1d21',
+            color: '#e8e8e8',
+            border: '1px solid rgba(255,255,255,0.12)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+            font: '13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            userSelect: 'none',
+        });
+
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.textContent = 'Save image';
+        Object.assign(item.style, {
+            display: 'block',
+            width: '100%',
+            padding: '7px 10px',
+            border: '0',
+            borderRadius: '5px',
+            background: 'transparent',
+            color: 'inherit',
+            textAlign: 'left',
+            font: 'inherit',
+            cursor: 'pointer',
+        });
+        item.addEventListener('mouseenter', () => { item.style.background = 'rgba(255,255,255,0.10)'; });
+        item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+        item.addEventListener('click', () => {
+            removeMenu();
+            saveImage(url).catch(error => console.error('Zlack: image save failed', error));
+        });
+        menu.appendChild(item);
+
+        // Off-screen measure, then clamp inside the viewport.
+        menu.style.left = '0px';
+        menu.style.top = '0px';
+        menu.style.visibility = 'hidden';
+        (document.body || document.documentElement).appendChild(menu);
+        const rect = menu.getBoundingClientRect();
+        menu.style.left = Math.max(4, Math.min(x, window.innerWidth - rect.width - 4)) + 'px';
+        menu.style.top = Math.max(4, Math.min(y, window.innerHeight - rect.height - 4)) + 'px';
+        menu.style.visibility = 'visible';
+
+        document.addEventListener('pointerdown', onDismissPointer, true);
+        document.addEventListener('keydown', onDismissKey, true);
+        document.addEventListener('scroll', removeMenu, true);
+        window.addEventListener('blur', removeMenu, true);
+    }
+
+    document.addEventListener('contextmenu', (event) => {
+        const url = imageUrlFromTarget(event.target);
+        if (!url) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        buildMenu(event.clientX, event.clientY, url);
+    }, true);
+})();
+
+
 
 

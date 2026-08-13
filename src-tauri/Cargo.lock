@@ -6,6 +6,7 @@ version = 4
 name = "Zlack"
 version = "1.4.0"
 dependencies = [
+ "base64 0.22.1",
  "cc",
  "image",
  "lazy_static",

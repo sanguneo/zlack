@@ -14,6 +14,7 @@ use tauri::{
     Position, Size, SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem, WindowEvent,
 };
 
+mod downloads;
 mod icons;
 mod native_notifications;
 mod notifications;
@@ -931,6 +932,7 @@ fn main() {
     .invoke_handler(tauri::generate_handler![
       native_notifications::notify,
       native_notifications::update_notification_context,
+      downloads::save_image,
       load_user_css,
       security::open_external_url,
       update_badge,

@@ -189,3 +189,13 @@ pub(crate) fn notify(
         register_pending_notification(app_handle.clone(), window.label().to_string(), activation);
     backend::show(&app_handle, notification_id, title, body);
 }
+
+/// Show a fire-and-forget local toast (for example "Image saved") that reuses
+/// the platform notification backend. Its id is never registered for
+/// activation, so clicking the toast is a harmless no-op.
+pub(crate) fn show_local_notification(app_handle: &tauri::AppHandle, title: String, body: String) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let notification_id = format!("zlack-local-{}", COUNTER.fetch_add(1, Ordering::Relaxed));
+    backend::show(app_handle, notification_id, title, body);
+}
