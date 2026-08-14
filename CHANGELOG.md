@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-08-14
+
+### Fixed
+
+- **Image context menu actions**: `Save`, `Copy`, and `Downloads` now run before Slack's page-level pointer handlers can intercept them, and the shorter labels keep the menu compact.
+
+## [1.5.0] - 2026-08-14
+
 ### Added
 
 - **Right-click image download**: Right-clicking an image in Slack now shows a **Save image** menu that fetches the image with the session's own cookies — so authenticated `files.slack.com` images save correctly — writes it to the Downloads folder, and confirms with an **Image saved** notification. The save is routed through the native layer, so it also works on macOS/Linux, where the WebView's own download path did nothing.
