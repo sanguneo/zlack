@@ -361,6 +361,8 @@ fn create_workspace_window(
     .initialization_script(concat!(
         include_str!("../notification-bridge.cjs"),
         "\n",
+        include_str!("../context-menu-bridge.cjs"),
+        "\n",
         include_str!("../preload.js")
     ))
     .disable_file_drop_handler()
@@ -912,6 +914,8 @@ fn main() {
       .maximized(start_maximized)
       .initialization_script(concat!(
         include_str!("../notification-bridge.cjs"),
+        "\n",
+        include_str!("../context-menu-bridge.cjs"),
         "\n",
         include_str!("../preload.js")
       ))

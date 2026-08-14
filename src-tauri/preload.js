@@ -1535,6 +1535,7 @@ function zlackErrorText(error) {
 (function setupImageSaveMenu() {
     const MENU_ID = 'zlack-image-context-menu';
     const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|svg|avif|ico|tiff?)(\?|#|$)/i;
+    const menuActions = new WeakMap();
 
     function backgroundImageUrl(el) {
         const inline = el.style && el.style.backgroundImage;
@@ -1560,10 +1561,6 @@ function zlackErrorText(error) {
         return null;
     }
 
-    function onDismissPointer(event) {
-        if (!event.target || !event.target.closest || !event.target.closest('#' + MENU_ID)) removeMenu();
-    }
-
     function onDismissKey(event) {
         if (event.key === 'Escape') removeMenu();
     }
@@ -1571,11 +1568,19 @@ function zlackErrorText(error) {
     function removeMenu() {
         const existing = document.getElementById(MENU_ID);
         if (existing) existing.remove();
-        document.removeEventListener('pointerdown', onDismissPointer, true);
         document.removeEventListener('keydown', onDismissKey, true);
         document.removeEventListener('scroll', removeMenu, true);
         window.removeEventListener('blur', removeMenu, true);
     }
+
+    const onMenuPointer = ZlackContextMenuBridge.createPointerHandler({
+        actionByButton: menuActions,
+        dismiss: removeMenu,
+        isOpen: () => Boolean(document.getElementById(MENU_ID)),
+        menuSelector: '#' + MENU_ID,
+    });
+    window.addEventListener('pointerdown', onMenuPointer, true);
+    window.addEventListener('click', onMenuPointer, true);
 
     async function fetchImageBlob(url) {
         const response = await zlackAuthenticatedFetch(url);
@@ -1621,7 +1626,7 @@ function zlackErrorText(error) {
             throw new Error('Clipboard API is not available in this WebView');
         }
         // Hand the ClipboardItem a promise so clipboard.write starts inside
-        // the click's user-activation window instead of after the fetch.
+        // the pointer action's user-activation window instead of after the fetch.
         const png = fetchImageBlob(url).then(
             (blob) => (blob.type === 'image/png' ? blob : toPngBlob(blob))
         );
@@ -1664,10 +1669,7 @@ function zlackErrorText(error) {
             });
             item.addEventListener('mouseenter', () => { item.style.background = 'rgba(255,255,255,0.10)'; });
             item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
-            item.addEventListener('click', () => {
-                removeMenu();
-                action();
-            });
+            menuActions.set(item, action);
             menu.appendChild(item);
         }
 
@@ -1681,7 +1683,6 @@ function zlackErrorText(error) {
         menu.style.top = Math.max(4, Math.min(y, window.innerHeight - rect.height - 4)) + 'px';
         menu.style.visibility = 'visible';
 
-        document.addEventListener('pointerdown', onDismissPointer, true);
         document.addEventListener('keydown', onDismissKey, true);
         document.addEventListener('scroll', removeMenu, true);
         window.addEventListener('blur', removeMenu, true);
@@ -1690,14 +1691,14 @@ function zlackErrorText(error) {
     function menuItems(url) {
         return [
             {
-                label: 'Save image',
+                label: 'Save',
                 action: () => saveImage(url).catch((error) => {
                     console.error('Zlack: image save failed', error);
                     zlackPageToast('Image save failed');
                 }),
             },
             {
-                label: 'Copy image',
+                label: 'Copy',
                 action: () => copyImage(url)
                     .then(() => zlackPageToast('Image copied'))
                     .catch((error) => {
@@ -1706,7 +1707,7 @@ function zlackErrorText(error) {
                     }),
             },
             {
-                label: 'Open Downloads folder',
+                label: 'Downloads',
                 action: () => tauriInvoke('open_downloads_folder').catch((error) => {
                     console.error('Zlack: open Downloads folder failed', error);
                     zlackPageToast('Could not open Downloads folder');
