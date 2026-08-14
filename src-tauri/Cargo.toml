@@ -1,6 +1,6 @@
 [package]
 name = "Zlack"
-version = "1.5.1"
+version = "1.5.2"
 description = "A lightweight Slack desktop client built with Tauri"
 authors = ["sanguneo"]
 edition = "2021"
@@ -17,7 +17,7 @@ cc = "1"
 lazy_static = "1.5.0"
 base64 = "0.22"
 image = { version = "0.24", default-features = false, features = ["png", "ico"] }
-tauri = { version = "1", features = ["system-tray"] }
+tauri = { version = "1", features = ["system-tray", "updater"] }
 tauri-plugin-single-instance = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
 open = "3"
 serde = { version = "1", features = ["derive"] }

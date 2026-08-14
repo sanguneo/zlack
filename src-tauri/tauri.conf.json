@@ -6,7 +6,7 @@
   },
   "package": {
     "productName": "Zlack",
-    "version": "1.5.1"
+    "version": "1.5.2"
   },
   "tauri": {
     "allowlist": {
@@ -43,6 +43,14 @@
       "iconPath": "icons/icon.png",
       "iconAsTemplate": true,
       "menuOnLeftClick": false
+    },
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/sanguneo/zlack/releases/latest/download/latest.json"
+      ],
+      "dialog": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE5QTRGQzgwMUE1MTQ1MjAKUldRZ1JWRWFnUHlrcWRXUDVxUnRiMVgzRDRaRzNwOGhuZGpjWGhMcnczcG04TE9xczdiTFdHc1AK"
     },
     "bundle": {
       "active": true,

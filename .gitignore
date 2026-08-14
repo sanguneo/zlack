@@ -25,6 +25,7 @@ dist-ssr
 
 # Tauri
 src-tauri/target/
+.tauri-private/
 
 # Optional private WebView2 runtime (downloaded, not committed)
 src-tauri/webview2-runtime/

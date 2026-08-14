@@ -71,6 +71,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           # Disable strip during AppImage bundling to avoid linuxdeploy failing on
           # shared libs with RELR (`.relr.dyn`) relocations (mirrors build_dist.sh).
           NO_STRIP: 'true'
@@ -80,4 +82,5 @@ jobs:
           releaseBody: 'See the assets below to download and install this version.'
           releaseDraft: true
           prerelease: false
+          includeUpdaterJson: true
           args: ${{ matrix.args }}
