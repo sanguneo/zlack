@@ -1381,6 +1381,18 @@ document.addEventListener('click', (e) => {
 
     const href = target.href;
     const parsed = zlackUrl(href);
+
+    // Slack attachment downloads (PDF, ZIP, ...) must not rely on the
+    // WebView's native download path — on macOS/Linux it often does nothing.
+    // Fetch inside the page instead (so authenticated cookies apply) and hand
+    // the bytes to Rust, mirroring the image save flow.
+    if (zlackIsSlackFileDownload(target, parsed)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        zlackDownloadFile(parsed.href, target.getAttribute('download') || '');
+        return;
+    }
+
     const isExternal = zlackIsHttpUrl(parsed) && !zlackIsSlackUrl(parsed);
 
     if (isExternal) {
@@ -1398,7 +1410,123 @@ document.addEventListener('click', (e) => {
 }, true); // Capture phase to ensure we get it before Slack
 
 
-// 5. Right-click "Save image".
+// 5. Slack attachment downloads (fetch -> IPC).
+// Keep in sync with MAX_FILE_BYTES in downloads.rs.
+const ZLACK_MAX_DOWNLOAD_BYTES = 256 * 1024 * 1024;
+
+// Only intercept links with clear download intent: Slack's own download
+// buttons carry a `download` attribute, and the canonical attachment URLs
+// look like files.slack.com/files-pri/T…-F…/download/name. Everything else
+// keeps its existing navigation behavior.
+function zlackIsSlackFileDownload(anchor, parsed) {
+    if (!zlackIsSlackUrl(parsed)) return false;
+    return anchor.hasAttribute('download') || /\/download\//i.test(parsed.pathname);
+}
+
+function zlackAuthenticatedFetch(url) {
+    const fetchImpl = typeof originalFetch === 'function' ? originalFetch : window.fetch;
+    return fetchImpl(url, { credentials: 'include', cache: 'no-store' });
+}
+
+function zlackToBase64(bytes) {
+    let binary = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+}
+
+function zlackFilenameFromUrl(url) {
+    try {
+        const parsed = new URL(url, window.location.href);
+        return decodeURIComponent(parsed.pathname.split('/').filter(Boolean).pop() || '');
+    } catch (_) {
+        return '';
+    }
+}
+
+// filename*=UTF-8''… wins over plain filename=…; both are optional because
+// cross-origin responses may not expose the header at all.
+function zlackFilenameFromContentDisposition(header) {
+    if (!header) return '';
+    const star = header.match(/filename\*\s*=\s*utf-8''([^;]+)/i);
+    if (star) {
+        try {
+            return decodeURIComponent(star[1].trim());
+        } catch (_) { /* fall through to plain filename */ }
+    }
+    const quoted = header.match(/filename\s*=\s*"([^"]*)"/i);
+    if (quoted) return quoted[1].trim();
+    const bare = header.match(/filename\s*=\s*([^;]+)/i);
+    return bare ? bare[1].trim() : '';
+}
+
+// Minimal in-page feedback for failures (and clipboard success), since those
+// paths have no native toast of their own.
+function zlackPageToast(message) {
+    const ID = 'zlack-page-toast';
+    const existing = document.getElementById(ID);
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.id = ID;
+    toast.textContent = message;
+    Object.assign(toast.style, {
+        position: 'fixed',
+        left: '50%',
+        bottom: '28px',
+        transform: 'translateX(-50%)',
+        zIndex: '2147483647',
+        maxWidth: '70vw',
+        padding: '8px 14px',
+        borderRadius: '8px',
+        background: '#1a1d21',
+        color: '#e8e8e8',
+        border: '1px solid rgba(255,255,255,0.12)',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        font: '13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        pointerEvents: 'none',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+    });
+    (document.body || document.documentElement).appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+}
+
+async function zlackDownloadFile(url, suggestedName) {
+    try {
+        const response = await zlackAuthenticatedFetch(url);
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const disposition = response.headers.get('content-disposition');
+        const blob = await response.blob();
+        if (!blob.size) throw new Error('empty file');
+        if (blob.size > ZLACK_MAX_DOWNLOAD_BYTES) throw new Error('file is too large to download');
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        const filename = zlackFilenameFromContentDisposition(disposition)
+            || suggestedName
+            || zlackFilenameFromUrl(url);
+        await tauriInvoke('save_file', {
+            filename,
+            dataBase64: zlackToBase64(bytes),
+        });
+    } catch (error) {
+        console.error('Zlack: file download failed', error);
+        zlackPageToast('Download failed: ' + zlackErrorText(error));
+    }
+}
+
+// Errors here are either JS Error objects or the serialized Rust SaveError
+// ({ kind, message }); render something readable for both.
+function zlackErrorText(error) {
+    if (!error) return 'unknown error';
+    if (error.message && typeof error.message === 'string') return error.message;
+    if (error.kind) return String(error.kind);
+    return String(error);
+}
+
+
+// 6. Right-click "Save image".
 // Slack layers its own handlers over images, so the WebView's native "Save
 // image as" is unreliable — and on macOS/Linux the WebView download path often
 // does nothing at all. We fetch the image inside the page (so authenticated
@@ -1432,15 +1560,6 @@ document.addEventListener('click', (e) => {
         return null;
     }
 
-    function filenameFromUrl(url) {
-        try {
-            const parsed = new URL(url, window.location.href);
-            return decodeURIComponent(parsed.pathname.split('/').filter(Boolean).pop() || '');
-        } catch (_) {
-            return '';
-        }
-    }
-
     function onDismissPointer(event) {
         if (!event.target || !event.target.closest || !event.target.closest('#' + MENU_ID)) removeMenu();
     }
@@ -1458,30 +1577,58 @@ document.addEventListener('click', (e) => {
         window.removeEventListener('blur', removeMenu, true);
     }
 
-    function toBase64(bytes) {
-        let binary = '';
-        const chunk = 0x8000;
-        for (let i = 0; i < bytes.length; i += chunk) {
-            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-        }
-        return btoa(binary);
+    async function fetchImageBlob(url) {
+        const response = await zlackAuthenticatedFetch(url);
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const blob = await response.blob();
+        if (!blob.size) throw new Error('empty image');
+        return blob;
     }
 
     async function saveImage(url) {
-        const fetchImpl = typeof originalFetch === 'function' ? originalFetch : window.fetch;
-        const response = await fetchImpl(url, { credentials: 'include', cache: 'no-store' });
-        if (!response.ok) throw new Error('HTTP ' + response.status);
-        const blob = await response.blob();
+        const blob = await fetchImageBlob(url);
         const bytes = new Uint8Array(await blob.arrayBuffer());
-        if (!bytes.length) throw new Error('empty image');
         return tauriInvoke('save_image', {
-            filename: filenameFromUrl(url),
+            filename: zlackFilenameFromUrl(url),
             mime: blob.type || '',
-            dataBase64: toBase64(bytes),
+            dataBase64: zlackToBase64(bytes),
         });
     }
 
-    function buildMenu(x, y, url) {
+    // The async Clipboard API only guarantees image/png, so anything else is
+    // re-encoded through a canvas first. This copies actual image data — not
+    // the URL as text.
+    async function toPngBlob(blob) {
+        const bitmap = await createImageBitmap(blob);
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = bitmap.width;
+            canvas.height = bitmap.height;
+            canvas.getContext('2d').drawImage(bitmap, 0, 0);
+            return await new Promise((resolve, reject) => {
+                canvas.toBlob(
+                    (out) => (out ? resolve(out) : reject(new Error('PNG encode failed'))),
+                    'image/png'
+                );
+            });
+        } finally {
+            bitmap.close();
+        }
+    }
+
+    async function copyImage(url) {
+        if (!navigator.clipboard || !navigator.clipboard.write || typeof ClipboardItem === 'undefined') {
+            throw new Error('Clipboard API is not available in this WebView');
+        }
+        // Hand the ClipboardItem a promise so clipboard.write starts inside
+        // the click's user-activation window instead of after the fetch.
+        const png = fetchImageBlob(url).then(
+            (blob) => (blob.type === 'image/png' ? blob : toPngBlob(blob))
+        );
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+    }
+
+    function buildMenu(x, y, items) {
         removeMenu();
         const menu = document.createElement('div');
         menu.id = MENU_ID;
@@ -1499,28 +1646,30 @@ document.addEventListener('click', (e) => {
             userSelect: 'none',
         });
 
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.textContent = 'Save image';
-        Object.assign(item.style, {
-            display: 'block',
-            width: '100%',
-            padding: '7px 10px',
-            border: '0',
-            borderRadius: '5px',
-            background: 'transparent',
-            color: 'inherit',
-            textAlign: 'left',
-            font: 'inherit',
-            cursor: 'pointer',
-        });
-        item.addEventListener('mouseenter', () => { item.style.background = 'rgba(255,255,255,0.10)'; });
-        item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
-        item.addEventListener('click', () => {
-            removeMenu();
-            saveImage(url).catch(error => console.error('Zlack: image save failed', error));
-        });
-        menu.appendChild(item);
+        for (const { label, action } of items) {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.textContent = label;
+            Object.assign(item.style, {
+                display: 'block',
+                width: '100%',
+                padding: '7px 10px',
+                border: '0',
+                borderRadius: '5px',
+                background: 'transparent',
+                color: 'inherit',
+                textAlign: 'left',
+                font: 'inherit',
+                cursor: 'pointer',
+            });
+            item.addEventListener('mouseenter', () => { item.style.background = 'rgba(255,255,255,0.10)'; });
+            item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+            item.addEventListener('click', () => {
+                removeMenu();
+                action();
+            });
+            menu.appendChild(item);
+        }
 
         // Off-screen measure, then clamp inside the viewport.
         menu.style.left = '0px';
@@ -1538,12 +1687,40 @@ document.addEventListener('click', (e) => {
         window.addEventListener('blur', removeMenu, true);
     }
 
+    function menuItems(url) {
+        return [
+            {
+                label: 'Save image',
+                action: () => saveImage(url).catch((error) => {
+                    console.error('Zlack: image save failed', error);
+                    zlackPageToast('Image save failed');
+                }),
+            },
+            {
+                label: 'Copy image',
+                action: () => copyImage(url)
+                    .then(() => zlackPageToast('Image copied'))
+                    .catch((error) => {
+                        console.error('Zlack: image copy failed', error);
+                        zlackPageToast('Image copy failed');
+                    }),
+            },
+            {
+                label: 'Open Downloads folder',
+                action: () => tauriInvoke('open_downloads_folder').catch((error) => {
+                    console.error('Zlack: open Downloads folder failed', error);
+                    zlackPageToast('Could not open Downloads folder');
+                }),
+            },
+        ];
+    }
+
     document.addEventListener('contextmenu', (event) => {
         const url = imageUrlFromTarget(event.target);
         if (!url) return;
         event.preventDefault();
         event.stopImmediatePropagation();
-        buildMenu(event.clientX, event.clientY, url);
+        buildMenu(event.clientX, event.clientY, menuItems(url));
     }, true);
 })();
 

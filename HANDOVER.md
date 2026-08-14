@@ -1,5 +1,14 @@
 # Zlack 작업 인수인계
 
+## 진행 상황 (2026-08-14)
+
+아래 "남은 사용자 요청" 3건이 모두 구현되었다.
+
+- `downloads.rs`: `save_file`(256 MiB 상한, 확장자 강제 없음), `open_downloads_folder` 커맨드 추가. 공통 로직(`decode_base64_payload`, `downloads_dir`, `sanitize_stem`, `unique_path`)을 `save_image`와 공유. `main.rs`에 두 커맨드 등록.
+- `preload.js`: Slack 첨부 다운로드 링크(`download` 속성 또는 `/download/` 경로) capture 가로채기 → 인증 fetch → `save_file` IPC. 파일명은 `Content-Disposition`(`filename*` 우선) → `download` 속성 → URL 순. 이미지 컨텍스트 메뉴에 `Copy image`(PNG 변환 후 실제 이미지 데이터 복사), `Open Downloads folder` 추가. 실패 시 in-page 토스트로 사용자에게 알림.
+- 검증: `cargo test` 13/13 통과, `cargo build` 성공(신규 경고 없음), `node --check preload.js` 통과.
+- 미검증: GUI 로그인 세션이 없어 Behavioral QA(실제 저장/복사/폴더 열기/비이미지 첨부 무결성/링크 회귀) 전 항목 미수행. 실제 앱에서 QA 필요.
+
 ## 목적
 
 Claude provider의 stream start timeout이 반복되어 중단된 이미지/파일 다운로드 개선 작업을 다른 세션이나 모델이 바로 이어서 수행할 수 있도록 현재 상태와 남은 작업을 정리한다.

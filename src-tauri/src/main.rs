@@ -933,6 +933,8 @@ fn main() {
       native_notifications::notify,
       native_notifications::update_notification_context,
       downloads::save_image,
+      downloads::save_file,
+      downloads::open_downloads_folder,
       load_user_css,
       security::open_external_url,
       update_badge,

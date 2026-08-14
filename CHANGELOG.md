@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Right-click image download**: Right-clicking an image in Slack now shows a **Save image** menu that fetches the image with the session's own cookies — so authenticated `files.slack.com` images save correctly — writes it to the Downloads folder, and confirms with an **Image saved** notification. The save is routed through the native layer, so it also works on macOS/Linux, where the WebView's own download path did nothing.
+- **Attachment downloads**: Clicking a Slack attachment download link (PDF, ZIP, ...) now fetches the file inside the page with the session's own cookies and saves it to the Downloads folder through the native layer — so downloads work on macOS/Linux too — confirming with a **File saved** notification. Files are capped at 256 MiB, and failures surface as an in-app toast instead of being silently dropped.
+- **Copy image**: The image context menu gained a **Copy image** entry that puts the actual image data (converted to PNG when needed) on the clipboard, ready to paste into other apps.
+- **Open Downloads folder**: The image context menu also gained an **Open Downloads folder** entry that reveals the Downloads folder in the OS file manager, creating it first if needed.
 
 ### Fixed
 
