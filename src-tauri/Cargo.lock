@@ -8,6 +8,7 @@ version = "1.5.4"
 dependencies = [
  "base64 0.22.1",
  "cc",
+ "gtk",
  "image",
  "lazy_static",
  "notify-rust",
@@ -19,6 +20,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-winrt-notification",
  "url",
+ "webkit2gtk",
  "webview2-com",
  "windows 0.39.0",
  "windows 0.48.0",

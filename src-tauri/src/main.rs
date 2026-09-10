@@ -371,6 +371,7 @@ fn create_workspace_window(
     .icon(icons::ICON_WINDOW.clone())?
     .build()?;
     platform::set_default_download_folder(&window);
+    platform::configure_login_fallback(&window);
     icons::apply_window_icon(&window);
     let _ = window.set_skip_taskbar(!visible);
     if !visible {
@@ -927,6 +928,7 @@ fn main() {
       .icon(icons::ICON_WINDOW.clone())?
       .build()?;
       platform::set_default_download_folder(&_window);
+      platform::configure_login_fallback(&_window);
       {
         let state = app.state::<Mutex<WorkspaceState>>();
         touch_loaded_label(&mut state.lock().unwrap(), "main");
