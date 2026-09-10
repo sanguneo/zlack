@@ -27,6 +27,12 @@ url = "2"
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 notify-rust = "=4.11.7"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = "0.18"
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+gtk = "0.15"
+
 [target.'cfg(windows)'.dependencies]
 tauri-winrt-notification = "0.7.2"
 webview2-com = "0.19.1"
