@@ -1357,6 +1357,64 @@ function zlackOpenSlackUrlInCurrentWindow(href) {
 
 window.__ZlackNavigateSlackUrl = zlackOpenSlackUrlInCurrentWindow;
 
+// Slack pages that are not client routes (sign-in, "Add a workspace", help).
+// Sign-in flows must stay in this WebView so the new workspace's session is
+// stored with the others; everything else goes to the OS browser. Returns
+// false when the URL is not one of these pages. See slack-navigation.cjs.
+function zlackOpenSlackPage(href) {
+    const route = ZlackSlackNavigation.classify(href, window.location.href);
+    const parsed = zlackUrl(href);
+    if (route === 'signin') {
+        window.location.href = parsed.href;
+        return true;
+    }
+    if (route === 'external' && zlackIsSlackUrl(parsed)) {
+        tauriInvoke('open_external_url', { url: parsed.href }).catch(() => {});
+        return true;
+    }
+    return false;
+}
+
+// Slack sometimes opens a blank window first and points it at a URL later.
+// The WebView never creates that window, so hand Slack a stand-in whose
+// navigation is routed like a direct window.open(url).
+function zlackDeferredWindow() {
+    const navigate = (value) => {
+        const href = value && String(value);
+        if (!href || href === 'about:blank') return;
+        if (zlackSlackAppHref(href)) {
+            zlackOpenSlackUrlInCurrentWindow(href);
+            return;
+        }
+        if (zlackOpenSlackPage(href)) return;
+        const parsed = zlackUrl(href);
+        if (zlackIsHttpUrl(parsed)) {
+            tauriInvoke('open_external_url', { url: parsed.href }).catch(() => {});
+        }
+    };
+    const location = {
+        assign: navigate,
+        replace: navigate,
+        get href() { return 'about:blank'; },
+        set href(value) { navigate(value); },
+        toString() { return 'about:blank'; },
+    };
+    const stub = {
+        closed: false,
+        opener: null,
+        document: { write() {}, writeln() {}, open() {}, close() {}, title: '' },
+        focus() {},
+        blur() {},
+        close() { stub.closed = true; },
+        postMessage() {},
+        addEventListener() {},
+        removeEventListener() {},
+        get location() { return location; },
+        set location(value) { navigate(value); },
+    };
+    return stub;
+}
+
 const originalWindowOpen = window.open;
 window.open = function(url, target, features) {
     const href = typeof url === 'string' ? url : (url && String(url));
@@ -1372,7 +1430,13 @@ window.open = function(url, target, features) {
         return null;
     }
 
-    return originalWindowOpen.apply(this, arguments);
+    if (zlackIsSlackUrl(parsed) && zlackOpenSlackPage(parsed.href)) {
+        return null;
+    }
+
+    const opened = originalWindowOpen.apply(this, arguments);
+    if (opened) return opened;
+    return (!href || href === 'about:blank') ? zlackDeferredWindow() : null;
 };
 
 document.addEventListener('click', (e) => {
@@ -1405,7 +1469,15 @@ document.addEventListener('click', (e) => {
     if (target.target === '_blank') {
         // Do not prevent default here. Just remove the new-tab behavior for this
         // event turn and let Slack's own click handling do the in-app navigation.
-        zlackRetargetSlackAnchor(target);
+        if (zlackRetargetSlackAnchor(target)) return;
+
+        // A new-tab Slack page that is not a client route (sign-in, help)
+        // would otherwise be dropped by the WebView.
+        if (ZlackSlackNavigation.classify(href, window.location.href)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            zlackOpenSlackPage(href);
+        }
     }
 }, true); // Capture phase to ensure we get it before Slack
 

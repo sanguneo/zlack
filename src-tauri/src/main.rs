@@ -365,6 +365,8 @@ fn create_workspace_window(
         "\n",
         include_str!("../download-names.cjs"),
         "\n",
+        include_str!("../slack-navigation.cjs"),
+        "\n",
         include_str!("../preload.js")
     ))
     .disable_file_drop_handler()
@@ -920,6 +922,8 @@ fn main() {
         include_str!("../context-menu-bridge.cjs"),
         "\n",
         include_str!("../download-names.cjs"),
+        "\n",
+        include_str!("../slack-navigation.cjs"),
         "\n",
         include_str!("../preload.js")
       ))
