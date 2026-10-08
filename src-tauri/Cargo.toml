@@ -5,20 +5,19 @@ description = "A lightweight Slack desktop client built with Tauri"
 authors = ["sanguneo"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [build-dependencies]
-tauri-build = { version = "1", features = [] }
+tauri-build = { version = "2", features = [] }
 
 [target.'cfg(target_os = "macos")'.build-dependencies]
 cc = "1"
 
 [dependencies]
-lazy_static = "1.5.0"
 base64 = "0.22"
 image = { version = "0.24", default-features = false, features = ["png", "ico"] }
-tauri = { version = "1", features = ["system-tray", "updater"] }
-tauri-plugin-single-instance = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
 open = "3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -29,16 +28,9 @@ notify-rust = "=4.11.7"
 
 [target.'cfg(windows)'.dependencies]
 tauri-winrt-notification = "0.7.2"
-webview2-com = "0.19.1"
-windows-webview2 = { package = "windows", version = "0.39.0" }
-windows = { version = "0.48", features = [
+webview2-com = "0.39"
+windows = { version = "0.62", features = [
   "Win32_Foundation",
-  "Win32_System_Com",
-  "Win32_UI_Shell",
-  "Win32_UI_WindowsAndMessaging",
   "Win32_Graphics_Gdi",
+  "Win32_UI_WindowsAndMessaging",
 ] }
-
-[features]
-# This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
-custom-protocol = ["tauri/custom-protocol"]

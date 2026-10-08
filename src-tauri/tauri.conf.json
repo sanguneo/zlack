@@ -1,76 +1,39 @@
 {
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Zlack",
+  "version": "1.5.5",
+  "identifier": "com.sanguneo.zlack",
   "build": {
-    "devPath": "../src",
-    "distDir": "../src",
-    "withGlobalTauri": true
+    "frontendDist": "../src"
   },
-  "package": {
-    "productName": "Zlack",
-    "version": "1.5.5"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": false,
-      "shell": {
-        "all": false,
-        "open": false
-      },
-      "notification": {
-        "all": false
-      }
-    },
+  "app": {
     "windows": [],
     "security": {
-      "csp": null,
-      "dangerousRemoteDomainIpcAccess": [
-        {
-          "domain": "app.slack.com",
-          "windows": [
-            "main"
-          ],
-          "enableTauriAPI": true
-        },
-        {
-          "domain": "slack.com",
-          "windows": [
-            "main"
-          ],
-          "enableTauriAPI": true
-        }
-      ]
-    },
-    "systemTray": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true,
-      "menuOnLeftClick": false
-    },
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "publisher": "sanguneo",
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/icon.ico",
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.13"
+    }
+  },
+  "plugins": {
     "updater": {
-      "active": true,
       "endpoints": [
         "https://github.com/sanguneo/zlack/releases/latest/download/latest.json"
       ],
-      "dialog": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE5QTRGQzgwMUE1MTQ1MjAKUldRZ1JWRWFnUHlrcWRXUDVxUnRiMVgzRDRaRzNwOGhuZGpjWGhMcnczcG04TE9xczdiTFdHc1AK"
-    },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "identifier": "com.sanguneo.zlack",
-      "publisher": "sanguneo",
-      "icon": [
-        "icons/icon.ico",
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns"
-      ],
-      "macOS": {
-        "frameworks": [],
-        "minimumSystemVersion": "10.13",
-        "exceptionDomain": "",
-        "signingIdentity": null,
-        "entitlements": null
-      }
     }
   }
 }

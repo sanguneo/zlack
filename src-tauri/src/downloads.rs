@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
 use serde::Serialize;
+use tauri::Manager;
 
 /// Hard cap on a single decoded image. Slack images are far smaller; this only
 /// guards against a pathological payload coming from the page.
@@ -27,7 +28,7 @@ pub(crate) enum SaveError {
 /// Persist an image the page already fetched (with its own cookies) into the
 /// user's Downloads folder. The bytes arrive base64-encoded because the WebView
 /// is the only context that can read authenticated `files.slack.com` images,
-/// and Tauri v1 IPC is JSON so a compact string beats a raw byte array.
+/// and JSON IPC makes a compact string cheaper than a raw byte array.
 #[tauri::command]
 pub(crate) fn save_image(
     app_handle: tauri::AppHandle,
@@ -36,7 +37,7 @@ pub(crate) fn save_image(
     data_base64: String,
 ) -> Result<String, SaveError> {
     let data = decode_base64_payload(&data_base64, MAX_IMAGE_BYTES)?;
-    let dir = downloads_dir()?;
+    let dir = downloads_dir(&app_handle)?;
 
     let filename = filename.unwrap_or_default();
     let mime = mime.unwrap_or_default();
@@ -60,7 +61,7 @@ pub(crate) fn save_file(
     data_base64: String,
 ) -> Result<String, SaveError> {
     let data = decode_base64_payload(&data_base64, MAX_FILE_BYTES)?;
-    let dir = downloads_dir()?;
+    let dir = downloads_dir(&app_handle)?;
 
     let filename = filename.unwrap_or_default();
     let stem = sanitize_stem(&filename, DEFAULT_FILE_STEM);
@@ -76,8 +77,8 @@ pub(crate) fn save_file(
 /// Reveal the Downloads folder in the OS file manager, creating it first if it
 /// does not exist yet.
 #[tauri::command]
-pub(crate) fn open_downloads_folder() -> Result<(), SaveError> {
-    let dir = downloads_dir()?;
+pub(crate) fn open_downloads_folder(app_handle: tauri::AppHandle) -> Result<(), SaveError> {
+    let dir = downloads_dir(&app_handle)?;
     open::that(&dir).map_err(|error| SaveError::OpenFailed(error.to_string()))
 }
 
@@ -102,8 +103,11 @@ fn decode_base64_payload(data_base64: &str, max_bytes: usize) -> Result<Vec<u8>,
     Ok(data)
 }
 
-fn downloads_dir() -> Result<PathBuf, SaveError> {
-    let dir = tauri::api::path::download_dir().ok_or(SaveError::NoDownloadDir)?;
+fn downloads_dir(app_handle: &tauri::AppHandle) -> Result<PathBuf, SaveError> {
+    let dir = app_handle
+        .path()
+        .download_dir()
+        .map_err(|_| SaveError::NoDownloadDir)?;
     std::fs::create_dir_all(&dir).map_err(|error| SaveError::WriteFailed(error.to_string()))?;
     Ok(dir)
 }

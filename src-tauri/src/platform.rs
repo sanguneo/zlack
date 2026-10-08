@@ -1,10 +1,4 @@
 #[cfg(target_os = "windows")]
-use std::path::PathBuf;
-
-#[cfg(target_os = "windows")]
-const WINDOWS_DEFAULT_DOWNLOAD_FOLDER_NAME: &str = "Downloads";
-
-#[cfg(target_os = "windows")]
 pub(crate) fn prefer_private_webview2_runtime() {
     if std::env::var_os("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER").is_some() {
         return;
@@ -20,39 +14,15 @@ pub(crate) fn prefer_private_webview2_runtime() {
 pub(crate) fn prefer_private_webview2_runtime() {}
 
 #[cfg(target_os = "windows")]
-fn windows_downloads_dir() -> Option<PathBuf> {
-    use windows::Win32::{
-        Foundation::HANDLE,
-        System::Com::CoTaskMemFree,
-        UI::Shell::{FOLDERID_Downloads, SHGetKnownFolderPath, KF_FLAG_DEFAULT},
-    };
-
-    unsafe {
-        let path = SHGetKnownFolderPath(&FOLDERID_Downloads, KF_FLAG_DEFAULT, HANDLE(0)).ok()?;
-        let downloads = path.to_string().ok().map(PathBuf::from);
-        CoTaskMemFree(Some(path.as_ptr() as _));
-        downloads
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn windows_default_download_dir() -> PathBuf {
-    windows_downloads_dir()
-        .or_else(|| {
-            std::env::var_os("USERPROFILE")
-                .map(PathBuf::from)
-                .map(|home| home.join(WINDOWS_DEFAULT_DOWNLOAD_FOLDER_NAME))
-        })
-        .unwrap_or_else(|| PathBuf::from(WINDOWS_DEFAULT_DOWNLOAD_FOLDER_NAME))
-}
-
-#[cfg(target_os = "windows")]
-pub(crate) fn set_default_download_folder(window: &tauri::Window) {
+pub(crate) fn set_default_download_folder(window: &tauri::WebviewWindow) {
     use std::os::windows::ffi::OsStrExt;
+    use tauri::Manager;
     use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_13;
-    use windows_webview2::core::{Interface, PCWSTR};
+    use windows::core::{Interface, PCWSTR};
 
-    let download_dir = windows_default_download_dir();
+    let Ok(download_dir) = window.path().download_dir() else {
+        return;
+    };
     let _ = std::fs::create_dir_all(&download_dir);
     let _ = window.with_webview(move |webview| {
         let download_dir: Vec<u16> = download_dir
@@ -75,4 +45,4 @@ pub(crate) fn set_default_download_folder(window: &tauri::Window) {
 }
 
 #[cfg(not(target_os = "windows"))]
-pub(crate) fn set_default_download_folder(_window: &tauri::Window) {}
+pub(crate) fn set_default_download_folder(_window: &tauri::WebviewWindow) {}

@@ -1,0 +1,23 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "slack",
+  "description": "Zlack commands for the remote Slack client in Zlack-managed windows.",
+  "windows": ["main", "workspace-*"],
+  "remote": {
+    "urls": ["https://slack.com/*", "https://*.slack.com/*"]
+  },
+  "permissions": [
+    "allow-notify",
+    "allow-update-notification-context",
+    "allow-save-image",
+    "allow-save-file",
+    "allow-open-downloads-folder",
+    "allow-load-user-css",
+    "allow-open-external-url",
+    "allow-update-badge",
+    "allow-update-workspace-meta",
+    "allow-workspace-status",
+    "allow-register-workspaces",
+    "allow-switch-workspace"
+  ]
+}

@@ -12,9 +12,13 @@ use std::{
     time::Duration,
 };
 use tauri::{
-    scope::ipc::RemoteDomainAccessScope, CustomMenuItem, Manager, PhysicalPosition, PhysicalSize,
-    Position, Size, SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem, WindowEvent,
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Manager, PhysicalPosition, PhysicalSize, Position, Size, WebviewUrl, WebviewWindow,
+    WebviewWindowBuilder, WindowEvent,
 };
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
+use tauri_plugin_updater::UpdaterExt;
 
 mod downloads;
 mod icons;
@@ -49,8 +53,9 @@ fn load_user_css() -> Option<String> {
 }
 
 fn window_state_path(app: &tauri::AppHandle) -> Option<PathBuf> {
-    app.path_resolver()
+    app.path()
         .app_config_dir()
+        .ok()
         .map(|dir| dir.join("window-state"))
 }
 
@@ -113,6 +118,17 @@ struct WorkspaceStatus {
 }
 
 const MAX_LOADED_WORKSPACES: usize = 2;
+const TRAY_ID: &str = "main";
+const BROWSER_ARGS: &str = "--disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding";
+const INIT_SCRIPT: &str = concat!(
+    include_str!("../notification-bridge.cjs"),
+    "\n",
+    include_str!("../context-menu-bridge.cjs"),
+    "\n",
+    include_str!("../download-names.cjs"),
+    "\n",
+    include_str!("../preload.js")
+);
 
 #[derive(Default)]
 struct WorkspaceState {
@@ -148,17 +164,7 @@ fn workspace_label(team: &str) -> String {
     format!("workspace-{}", safe)
 }
 
-fn allow_remote_ipc_for_label(app: &tauri::AppHandle, label: &str) {
-    for domain in ["app.slack.com", "slack.com"] {
-        app.ipc_scope().configure_remote_access(
-            RemoteDomainAccessScope::new(domain)
-                .add_window(label)
-                .enable_tauri_api(),
-        );
-    }
-}
-
-fn active_window(app: &tauri::AppHandle) -> Option<tauri::Window> {
+fn active_window(app: &tauri::AppHandle) -> Option<WebviewWindow> {
     let label = app
         .try_state::<Mutex<WorkspaceState>>()
         .map(|state| {
@@ -170,7 +176,8 @@ fn active_window(app: &tauri::AppHandle) -> Option<tauri::Window> {
             }
         })
         .unwrap_or_else(|| "main".to_string());
-    app.get_window(&label).or_else(|| app.get_window("main"))
+    app.get_webview_window(&label)
+        .or_else(|| app.get_webview_window("main"))
 }
 
 fn touch_loaded_label(state: &mut WorkspaceState, label: &str) {
@@ -218,7 +225,7 @@ fn evict_loaded_workspaces(app: &tauri::AppHandle) {
         };
         state
             .loaded_labels
-            .retain(|label| app.get_window(label).is_some());
+            .retain(|label| app.get_webview_window(label).is_some());
 
         let mut labels = Vec::new();
         while state.loaded_labels.len() > MAX_LOADED_WORKSPACES {
@@ -245,7 +252,7 @@ fn evict_loaded_workspaces(app: &tauri::AppHandle) {
     };
 
     for label in &labels {
-        if let Some(window) = app.get_window(label) {
+        if let Some(window) = app.get_webview_window(label) {
             let _ = window.close();
         }
     }
@@ -259,7 +266,7 @@ fn loaded_workspace_count(app: &tauri::AppHandle) -> usize {
     let mut state = state.lock().unwrap();
     state
         .loaded_labels
-        .retain(|label| app.get_window(label).is_some());
+        .retain(|label| app.get_webview_window(label).is_some());
     state.loaded_labels.len()
 }
 
@@ -292,50 +299,42 @@ fn apply_global_badge(app_handle: &tauri::AppHandle, state: &str, title: &str) {
         let _ = window.set_title(&title);
     }
 
-    let tray = app_handle.tray_handle();
-    match state {
-        "mention" => {
-            #[cfg(target_os = "macos")]
-            let _ = tray.set_icon_as_template(false);
-            let _ = tray.set_icon(icons::ICON_RED.clone());
-        }
-        "unread" => {
-            #[cfg(target_os = "macos")]
-            let _ = tray.set_icon_as_template(false);
-            let _ = tray.set_icon(icons::ICON_BLUE.clone());
-        }
-        _ => {
-            #[cfg(target_os = "macos")]
-            let _ = tray.set_icon_as_template(true);
-            let _ = tray.set_icon(icons::ICON_NORMAL.clone());
-        }
+    let icon: &tauri::image::Image = match state {
+        "mention" => &icons::ICON_RED,
+        "unread" => &icons::ICON_BLUE,
+        _ => &icons::ICON_NORMAL,
+    };
+    if let Some(tray) = app_handle.tray_by_id(TRAY_ID) {
+        #[cfg(target_os = "macos")]
+        let _ = tray.set_icon_as_template(state != "mention" && state != "unread");
+        let _ = tray.set_icon(Some(icon.clone()));
     }
 
     #[cfg(target_os = "windows")]
-    {
-        let app = app_handle.clone();
-        let state_for_overlay = state.to_string();
-        let _ = app_handle.run_on_main_thread(move || {
-            if let Some(window) = active_window(&app) {
-                let color = match state_for_overlay.as_str() {
-                    "mention" => Some(icons::BADGE_RED),
-                    "unread" => Some(icons::BADGE_BLUE),
-                    _ => None,
-                };
-                // Keep the overlay as a simple colored dot. The count was hard to
-                // read at taskbar size. To re-enable it, capture `count` before this
-                // closure and keep the digits small (for example, use 4/2 instead of
-                // 5/3 in draw_overlay_digits):
-                // let overlay_count = if state_for_overlay == "mention" {
-                //     count_for_overlay
-                // } else {
-                //     None
-                // };
-                let overlay_count = None;
-                icons::set_taskbar_overlay(&window, color, overlay_count);
-            }
-        });
+    if let Some(window) = active_window(app_handle) {
+        let color = match state {
+            "mention" => Some(icons::BADGE_RED),
+            "unread" => Some(icons::BADGE_BLUE),
+            _ => None,
+        };
+        let _ = window.set_overlay_icon(color.map(icons::overlay_icon));
     }
+}
+
+fn slack_window<'a>(
+    app: &'a tauri::AppHandle,
+    label: &str,
+    url: WebviewUrl,
+) -> tauri::Result<WebviewWindowBuilder<'a, tauri::Wry, AppHandle>> {
+    WebviewWindowBuilder::new(app, label, url)
+        .additional_browser_args(BROWSER_ARGS)
+        .user_agent(user_agent())
+        .title("Zlack")
+        .inner_size(1200.0, 800.0)
+        .resizable(true)
+        .initialization_script(INIT_SCRIPT)
+        .disable_drag_drop_handler()
+        .icon(icons::ICON_WINDOW.clone())
 }
 
 fn create_workspace_window(
@@ -344,8 +343,7 @@ fn create_workspace_window(
     label: &str,
     visible: bool,
     url: Option<String>,
-) -> tauri::Result<tauri::Window> {
-    allow_remote_ipc_for_label(app, label);
+) -> tauri::Result<WebviewWindow> {
     let target_url = url.unwrap_or_else(|| {
         if team.contains('.') {
             format!("https://{}/client", team)
@@ -354,38 +352,11 @@ fn create_workspace_window(
         }
     });
     let target_url = security::parse_slack_url(&target_url).ok_or(
-        tauri::Error::InvalidWindowUrl("workspace URLs must use HTTPS on slack.com"),
+        tauri::Error::InvalidWebviewUrl("workspace URLs must use HTTPS on slack.com"),
     )?;
-    if let Some(domain) = target_url.host_str() {
-        app.ipc_scope().configure_remote_access(
-            RemoteDomainAccessScope::new(domain)
-                .add_window(label)
-                .enable_tauri_api(),
-        );
-    }
-    let window = tauri::WindowBuilder::new(
-        app,
-        label,
-        tauri::WindowUrl::External(target_url),
-    )
-    .additional_browser_args("--disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding")
-    .user_agent(user_agent())
-    .title("Zlack")
-    .inner_size(1200.0, 800.0)
-    .resizable(true)
-    .visible(visible)
-    .initialization_script(concat!(
-        include_str!("../notification-bridge.cjs"),
-        "\n",
-        include_str!("../context-menu-bridge.cjs"),
-        "\n",
-        include_str!("../download-names.cjs"),
-        "\n",
-        include_str!("../preload.js")
-    ))
-    .disable_file_drop_handler()
-    .icon(icons::ICON_WINDOW.clone())?
-    .build()?;
+    let window = slack_window(app, label, WebviewUrl::External(target_url))?
+        .visible(visible)
+        .build()?;
     platform::set_default_download_folder(&window);
     icons::apply_window_icon(&window);
     let _ = window.set_skip_taskbar(!visible);
@@ -421,7 +392,7 @@ fn ensure_workspace_window(
         }
     };
 
-    if app.get_window(&label).is_none()
+    if app.get_webview_window(&label).is_none()
         && create_workspace_window(app, team, &label, false, url).is_err()
     {
         return None;
@@ -435,7 +406,7 @@ fn ensure_workspace_window(
     Some(label)
 }
 
-fn show_workspace_for_switch(window: &tauri::Window) {
+fn show_workspace_for_switch(window: &WebviewWindow) {
     let _ = window.unminimize();
     let _ = window.show();
     // Re-add after showing. On Windows, adding a hidden WebView back to the
@@ -462,7 +433,7 @@ fn sync_hidden_workspace_geometry(app: &tauri::AppHandle, source: &tauri::Window
         if label == source_label {
             continue;
         }
-        if let Some(window) = app.get_window(&label) {
+        if let Some(window) = app.get_webview_window(&label) {
             if maximized {
                 let _ = window.maximize();
             } else {
@@ -488,7 +459,7 @@ pub(crate) fn switch_to_workspace(app: &tauri::AppHandle, team: &str, url: Optio
         None => return,
     };
     let current = active_window(app);
-    let target = match app.get_window(&target_label) {
+    let target = match app.get_webview_window(&target_label) {
         Some(window) => window,
         None => return,
     };
@@ -559,12 +530,12 @@ pub(crate) fn switch_to_workspace(app: &tauri::AppHandle, team: &str, url: Optio
         aggregate_badge(&state)
     };
     apply_global_badge(app, &state, &title);
-    sync_hidden_workspace_geometry(app, &target);
+    sync_hidden_workspace_geometry(app, &target.as_ref().window());
     evict_loaded_workspaces(app);
     emit_workspace_status(app);
 }
 
-pub(crate) fn focus_workspace_label(app: &tauri::AppHandle, label: &str) -> Option<tauri::Window> {
+pub(crate) fn focus_workspace_label(app: &tauri::AppHandle, label: &str) -> Option<WebviewWindow> {
     let team = {
         let state = app.state::<Mutex<WorkspaceState>>();
         let state = state.lock().unwrap();
@@ -573,10 +544,10 @@ pub(crate) fn focus_workspace_label(app: &tauri::AppHandle, label: &str) -> Opti
 
     if let Some(team) = team {
         switch_to_workspace(app, &team, None);
-        return app.get_window(label);
+        return app.get_webview_window(label);
     }
 
-    let window = app.get_window(label)?;
+    let window = app.get_webview_window(label)?;
     restore_window(&window);
     Some(window)
 }
@@ -603,7 +574,9 @@ fn build_workspace_status(state: &WorkspaceState, app: &tauri::AppHandle) -> Wor
     let mut seen = HashSet::new();
     let mut workspaces = Vec::new();
     for loaded_label in state.loaded_labels.iter() {
-        if state.closing_labels.contains(loaded_label) || app.get_window(loaded_label).is_none() {
+        if state.closing_labels.contains(loaded_label)
+            || app.get_webview_window(loaded_label).is_none()
+        {
             continue;
         }
         let Some(team) = state.team_by_label.get(loaded_label).cloned() else {
@@ -704,7 +677,7 @@ fn workspace_status(
 
     state
         .loaded_labels
-        .retain(|label| app_handle.get_window(label).is_some());
+        .retain(|label| app_handle.get_webview_window(label).is_some());
 
     build_workspace_status(&state, &app_handle)
 }
@@ -805,7 +778,7 @@ fn update_badge(
 }
 
 // Helper: robustly restore window on Windows and macOS
-fn restore_window(window: &tauri::Window) {
+fn restore_window(window: &WebviewWindow) {
     // 1. Unminimize (Restore geometry)
     if let Err(e) = window.unminimize() {
         eprintln!("Zlack: Failed to Unminimize: {}", e);
@@ -830,145 +803,172 @@ fn restore_window(window: &tauri::Window) {
     let _ = window.set_always_on_top(false);
 }
 
+async fn check_for_update(app: AppHandle) -> tauri_plugin_updater::Result<()> {
+    let Some(update) = app.updater()?.check().await? else {
+        return Ok(());
+    };
+    let install = app
+        .dialog()
+        .message(format!(
+            "Zlack {} is available (current: {}). Install it now?",
+            update.version, update.current_version
+        ))
+        .title("Update available")
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            "Install".into(),
+            "Later".into(),
+        ))
+        .blocking_show();
+    if install {
+        update.download_and_install(|_, _| {}, || {}).await?;
+        app.restart();
+    }
+    Ok(())
+}
+
+fn build_tray(app: &tauri::App) -> tauri::Result<()> {
+    let menu = Menu::with_items(
+        app,
+        &[
+            &MenuItem::with_id(app, "show", "Show Zlack", true, None::<&str>)?,
+            &PredefinedMenuItem::separator(app)?,
+            &MenuItem::with_id(app, "quit", "Quit Zlack", true, None::<&str>)?,
+        ],
+    )?;
+    TrayIconBuilder::with_id(TRAY_ID)
+        .icon(icons::ICON_NORMAL.clone())
+        .icon_as_template(true)
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "quit" => {
+                if let Some(window) = active_window(app) {
+                    save_window_maximized_from_window(app, &window.as_ref().window());
+                }
+                std::process::exit(0);
+            }
+            "show" => {
+                if let Some(window) = active_window(app) {
+                    restore_window(&window);
+                }
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                if let Some(window) = active_window(tray.app_handle()) {
+                    restore_window(&window);
+                }
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
+fn on_window_event(window: &tauri::Window, event: &WindowEvent) {
+    let app = window.app_handle();
+    let label = window.label().to_string();
+    match event {
+        WindowEvent::CloseRequested { api, .. } => {
+            let closing_for_eviction = app
+                .try_state::<Mutex<WorkspaceState>>()
+                .map(|state| state.lock().unwrap().closing_labels.contains(&label))
+                .unwrap_or(false);
+            if !closing_for_eviction {
+                save_window_maximized_from_window(app, window);
+                let _ = window.hide();
+                api.prevent_close();
+            }
+        }
+        WindowEvent::Destroyed => {
+            if let Some(state) = app.try_state::<Mutex<WorkspaceState>>() {
+                forget_workspace_label(&mut state.lock().unwrap(), &label);
+            }
+            emit_workspace_status(app);
+        }
+        WindowEvent::Resized(_)
+        | WindowEvent::Moved(_)
+        | WindowEvent::ScaleFactorChanged { .. } => {
+            let is_active = app
+                .try_state::<Mutex<WorkspaceState>>()
+                .map(|state| {
+                    let state = state.lock().unwrap();
+                    let active = if state.active_label.is_empty() {
+                        "main"
+                    } else {
+                        &state.active_label
+                    };
+                    active == label
+                })
+                .unwrap_or(label == "main");
+            if is_active {
+                save_window_maximized_from_window(app, window);
+            }
+            sync_hidden_workspace_geometry(app, window);
+        }
+        _ => {}
+    }
+}
+
 fn main() {
     platform::prefer_private_webview2_runtime();
 
-    let quit = CustomMenuItem::new("quit".to_string(), "Quit Zlack");
-    let show = CustomMenuItem::new("show".to_string(), "Show Zlack");
-    let tray_menu = SystemTrayMenu::new()
-        .add_item(show)
-        .add_native_item(SystemTrayMenuItem::Separator)
-        .add_item(quit);
-
-    let system_tray = SystemTray::new()
-        .with_icon(icons::ICON_NORMAL.clone())
-        .with_menu(tray_menu);
-
     tauri::Builder::default()
-    .manage(Mutex::new(WorkspaceState::default()))
-    .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-      if let Some(window) = active_window(app) {
-        restore_window(&window);
-      }
-    }))
-    .system_tray(system_tray)
-    .on_system_tray_event(|app, event| match event {
-      SystemTrayEvent::LeftClick { .. } => {
-        if let Some(window) = active_window(app) {
-          restore_window(&window);
-        }
-      }
-      SystemTrayEvent::MenuItemClick { id, .. } => {
-        match id.as_str() {
-          "quit" => {
+        .manage(Mutex::new(WorkspaceState::default()))
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             if let Some(window) = active_window(app) {
-              save_window_maximized_from_window(app, &window);
+                restore_window(&window);
             }
-            std::process::exit(0);
-          }
-          "show" => {
-            if let Some(window) = active_window(app) {
-              restore_window(&window);
+        }))
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .on_window_event(on_window_event)
+        .setup(|app| {
+            let handle = app.handle();
+            // Offline at launch: start on the bundled page, which opens Slack once it is reachable.
+            let start_url = if slack_reachable() {
+                WebviewUrl::External("https://app.slack.com/client".parse()?)
+            } else {
+                WebviewUrl::App("index.html".into())
+            };
+            let window = slack_window(handle, "main", start_url)?
+                .maximized(load_window_maximized(handle))
+                .build()?;
+            platform::set_default_download_folder(&window);
+            {
+                let state = app.state::<Mutex<WorkspaceState>>();
+                touch_loaded_label(&mut state.lock().unwrap(), "main");
             }
-          }
-          _ => {}
-        }
-      }
-      _ => {}
-    })
-    .on_window_event(|event| match event.event() {
-      WindowEvent::CloseRequested { api, .. } => {
-        let label = event.window().label().to_string();
-        let app = event.window().app_handle();
-        let closing_for_eviction = event.window().try_state::<Mutex<WorkspaceState>>()
-          .map(|state| state.lock().unwrap().closing_labels.contains(&label))
-          .unwrap_or(false);
-        if !closing_for_eviction {
-          save_window_maximized_from_window(&app, event.window());
-          event.window().hide().unwrap();
-          api.prevent_close();
-        }
-      }
-      WindowEvent::Destroyed => {
-        let label = event.window().label().to_string();
-        let app = event.window().app_handle();
-        if let Some(state) = event.window().try_state::<Mutex<WorkspaceState>>() {
-          forget_workspace_label(&mut state.lock().unwrap(), &label);
-        }
-        emit_workspace_status(&app);
-      }
-      WindowEvent::Focused(_focused) => {}
-      WindowEvent::Resized(_) | WindowEvent::Moved(_) | WindowEvent::ScaleFactorChanged { .. } => {
-        let app = event.window().app_handle();
-        let label = event.window().label().to_string();
-        let is_active = app.try_state::<Mutex<WorkspaceState>>()
-          .map(|state| {
-            let state = state.lock().unwrap();
-            let active = if state.active_label.is_empty() { "main" } else { &state.active_label };
-            active == label
-          })
-          .unwrap_or(label == "main");
-        if is_active {
-          save_window_maximized_from_window(&app, event.window());
-        }
-        sync_hidden_workspace_geometry(&app, event.window());
-      }
-      _ => {}
-    })
-    .setup(|app| {
-      let app_handle = app.handle();
-      let start_maximized = load_window_maximized(&app_handle);
-      allow_remote_ipc_for_label(&app_handle, "main");
-      // Offline at launch: start on the bundled page, which opens Slack once it is reachable.
-      let start_url = if slack_reachable() {
-        tauri::WindowUrl::External("https://app.slack.com/client".parse().unwrap())
-      } else {
-        tauri::WindowUrl::App("index.html".into())
-      };
-      let _window = tauri::WindowBuilder::new(app, "main", start_url)
-      .additional_browser_args("--disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding")
-      .user_agent(user_agent())
-      .title("Zlack")
-      .inner_size(1200.0, 800.0)
-      .resizable(true)
-      .maximized(start_maximized)
-      .initialization_script(concat!(
-        include_str!("../notification-bridge.cjs"),
-        "\n",
-        include_str!("../context-menu-bridge.cjs"),
-        "\n",
-        include_str!("../download-names.cjs"),
-        "\n",
-        include_str!("../preload.js")
-      ))
-      .disable_file_drop_handler()
-      .icon(icons::ICON_WINDOW.clone())?
-      .build()?;
-      platform::set_default_download_folder(&_window);
-      {
-        let state = app.state::<Mutex<WorkspaceState>>();
-        touch_loaded_label(&mut state.lock().unwrap(), "main");
-      }
-      icons::apply_window_icon(&_window);
-      // Match the runtime-rendered 32px tray base from the start so the larger
-      // bundled icon doesn't briefly flash before preload sends the first state.
-      let _ = app.tray_handle().set_icon(icons::ICON_NORMAL.clone());
-      Ok(())
-    })
-    .invoke_handler(tauri::generate_handler![
-      native_notifications::notify,
-      native_notifications::update_notification_context,
-      downloads::save_image,
-      downloads::save_file,
-      downloads::open_downloads_folder,
-      load_user_css,
-      security::open_external_url,
-      update_badge,
-      update_workspace_meta,
-      workspace_status,
-      register_workspaces,
-      switch_workspace
-    ])
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+            icons::apply_window_icon(&window);
+            build_tray(app)?;
+
+            let handle = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = check_for_update(handle).await {
+                    eprintln!("Zlack: Update check failed: {error}");
+                }
+            });
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            native_notifications::notify,
+            native_notifications::update_notification_context,
+            downloads::save_image,
+            downloads::save_file,
+            downloads::open_downloads_folder,
+            load_user_css,
+            security::open_external_url,
+            update_badge,
+            update_workspace_meta,
+            workspace_status,
+            register_workspaces,
+            switch_workspace
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }

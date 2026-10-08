@@ -36,7 +36,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.0-dev build-essential curl wget file \
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
             libssl-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev
 
       - name: Setup Node
@@ -45,11 +45,8 @@ jobs:
           node-version: 18
           cache: npm
 
-      # Pinned to 1.92 for the same reason CI is: Rust 1.93+ changed glob-import
-      # trait scoping, which breaks wry 0.24.11's `use webkit2gtk::{traits::*}` on
-      # the Linux (webkit2gtk) path used by Tauri v1. Unpin after a Tauri v2 upgrade.
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@1.92
+        uses: dtolnay/rust-toolchain@stable
         with:
           # Both macOS arches are needed to link a universal-apple-darwin binary.
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
@@ -98,8 +95,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # Disable strip during AppImage bundling to avoid linuxdeploy failing on
           # shared libs with RELR (`.relr.dyn`) relocations (mirrors build_dist.sh).
           NO_STRIP: 'true'

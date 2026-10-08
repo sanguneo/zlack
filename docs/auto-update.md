@@ -1,6 +1,6 @@
 # Automatic updates
 
-Zlack uses the Tauri v1 updater and publishes signed update artifacts through
+Zlack uses the Tauri v2 updater plugin and publishes signed update artifacts through
 GitHub Releases.
 
 ## One-time GitHub setup
@@ -8,8 +8,8 @@ GitHub Releases.
 Copy the values from the ignored local file `.tauri-private/updater.env` into
 these GitHub Actions repository secrets:
 
-- `TAURI_PRIVATE_KEY`
-- `TAURI_KEY_PASSWORD`
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 
 Keep an encrypted backup of `.tauri-private/updater.env`. Losing the private
 key means existing installations cannot verify updates signed by a replacement
@@ -24,4 +24,8 @@ key.
 
 The workflow uploads `latest.json`, signed updater bundles, and their
 signatures. Installed applications check `latest.json` at startup and show
-Tauri's built-in update dialog when a newer version is available.
+an install prompt (see `check_for_update` in `src-tauri/src/main.rs`) when a
+newer version is available.
+
+The updater public key lives in `plugins.updater.pubkey` in
+`src-tauri/tauri.conf.json` and must match the signing key above.

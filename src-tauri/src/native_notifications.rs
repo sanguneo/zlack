@@ -176,7 +176,7 @@ pub(crate) fn update_notification_context(
 
 #[tauri::command]
 pub(crate) fn notify(
-    window: tauri::Window,
+    window: tauri::WebviewWindow,
     app_handle: tauri::AppHandle,
     notification_id: String,
     title: String,
