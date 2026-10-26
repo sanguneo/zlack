@@ -350,46 +350,9 @@ function loadWorkspaceCache() {
     return setWorkspaceOrder(teams);
 }
 
-function createTauriCallback(callback, once = true) {
-    const id = window.crypto.getRandomValues(new Uint32Array(1))[0];
-    const prop = `_${id}`;
-    Object.defineProperty(window, prop, {
-        value: value => {
-            if (once) Reflect.deleteProperty(window, prop);
-            return callback && callback(value);
-        },
-        writable: false,
-        configurable: true,
-    });
-    return id;
-}
-
-function directTauriInvoke(command, args = {}) {
-    return new Promise((resolve, reject) => {
-        const callback = createTauriCallback(value => {
-            resolve(value);
-            Reflect.deleteProperty(window, `_${error}`);
-        });
-        const error = createTauriCallback(value => {
-            reject(value);
-            Reflect.deleteProperty(window, `_${callback}`);
-        });
-        window.__TAURI_IPC__({ cmd: command, callback, error, ...args });
-    });
-}
-
 function currentTauriInvoke() {
-    // Only treat IPC as ready once __TAURI_IPC__ exists. Prefer the public global
-    // Tauri API; __TAURI_INVOKE__ can queue forever in some remote-domain cases.
-    if (typeof window.__TAURI_IPC__ !== 'function') return null;
-    if (window.__TAURI__ && typeof window.__TAURI__.invoke === 'function') {
-        return (command, args) => window.__TAURI__.invoke(command, args);
-    }
-    if (window.__TAURI__ && window.__TAURI__.tauri && typeof window.__TAURI__.tauri.invoke === 'function') {
-        return (command, args) => window.__TAURI__.tauri.invoke(command, args);
-    }
-    if (typeof window.__TAURI_INVOKE__ === 'function') return window.__TAURI_INVOKE__;
-    return directTauriInvoke;
+    const internals = window.__TAURI_INTERNALS__;
+    return internals && typeof internals.invoke === 'function' ? internals.invoke : null;
 }
 
 function tauriInvoke(command, args, timeoutMs = 10000) {

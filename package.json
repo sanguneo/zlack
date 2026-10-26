@@ -37,6 +37,6 @@
     "build:dist:unix": "bash build_dist.sh"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^1"
+    "@tauri-apps/cli": "^2"
   }
 }

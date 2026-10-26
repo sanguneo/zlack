@@ -1,20 +1,15 @@
-use tauri::Icon;
+use std::sync::LazyLock;
+
+use tauri::image::Image;
 
 #[cfg(target_os = "windows")]
-use windows::{
-    core::PCWSTR,
-    Win32::Foundation::{HANDLE, HWND, LPARAM, WPARAM},
-    Win32::Graphics::Gdi::{
+use windows::Win32::{
+    Foundation::{LPARAM, WPARAM},
+    Graphics::Gdi::{
         CreateBitmap, CreateDIBSection, DeleteObject, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS,
-        HDC, HGDIOBJ,
     },
-    Win32::System::Com::{
-        CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
-    },
-    Win32::UI::Shell::{ITaskbarList3, TaskbarList},
-    Win32::UI::WindowsAndMessaging::{
-        CreateIconIndirect, DestroyIcon, SendMessageW, HICON, ICONINFO, ICON_BIG, ICON_SMALL,
-        WM_SETICON,
+    UI::WindowsAndMessaging::{
+        CreateIconIndirect, SendMessageW, HICON, ICONINFO, ICON_BIG, ICON_SMALL, WM_SETICON,
     },
 };
 
@@ -170,16 +165,12 @@ fn load_taskbar_icon_image(size: u32) -> image::RgbaImage {
     load_named_icon_image(size, &["zlack-taskbar.png", "zlack.png", "zlack.ico"])
 }
 
-fn icon_from_image(img: image::RgbaImage) -> Icon {
+fn icon_from_image(img: image::RgbaImage) -> Image<'static> {
     let (w, h) = (img.width(), img.height());
-    Icon::Rgba {
-        rgba: img.into_raw(),
-        width: w,
-        height: h,
-    }
+    Image::new_owned(img.into_raw(), w, h)
 }
 
-fn make_icon(badge: Option<[u8; 3]>) -> Icon {
+fn make_icon(badge: Option<[u8; 3]>) -> Image<'static> {
     let mut img = load_icon_image(TRAY_ICON_SIZE);
     if let Some(color) = badge {
         draw_badge(&mut img, color);
@@ -188,10 +179,9 @@ fn make_icon(badge: Option<[u8; 3]>) -> Icon {
 }
 
 #[cfg(target_os = "windows")]
-fn set_windows_window_icons(window: &tauri::Window) {
-    let hwnd = match window.hwnd() {
-        Ok(hwnd) => HWND(hwnd.0),
-        Err(_) => return,
+fn set_windows_window_icons(window: &tauri::WebviewWindow) {
+    let Ok(hwnd) = window.hwnd() else {
+        return;
     };
 
     unsafe {
@@ -206,108 +196,39 @@ fn set_windows_window_icons(window: &tauri::Window) {
                 let _ = SendMessageW(
                     hwnd,
                     WM_SETICON,
-                    WPARAM(icon_type as usize),
-                    LPARAM(hicon.0),
+                    Some(WPARAM(icon_type as usize)),
+                    Some(LPARAM(hicon.0 as isize)),
                 );
             }
         }
     }
 }
 
-pub(crate) fn apply_window_icon(window: &tauri::Window) {
+pub(crate) fn apply_window_icon(window: &tauri::WebviewWindow) {
     let _ = window.set_icon(ICON_WINDOW.clone());
     #[cfg(target_os = "windows")]
     set_windows_window_icons(window);
 }
 
-lazy_static::lazy_static! {
-  pub(crate) static ref ICON_WINDOW: Icon = icon_from_image(load_icon_image(WINDOW_ICON_SIZE));
-  pub(crate) static ref ICON_NORMAL: Icon = make_icon(None);
-  pub(crate) static ref ICON_BLUE: Icon = make_icon(Some(BADGE_BLUE)); // general unread
-  pub(crate) static ref ICON_RED: Icon = make_icon(Some(BADGE_RED));   // DM / mention
-}
+pub(crate) static ICON_WINDOW: LazyLock<Image<'static>> =
+    LazyLock::new(|| icon_from_image(load_icon_image(WINDOW_ICON_SIZE)));
+pub(crate) static ICON_NORMAL: LazyLock<Image<'static>> = LazyLock::new(|| make_icon(None));
+pub(crate) static ICON_BLUE: LazyLock<Image<'static>> =
+    LazyLock::new(|| make_icon(Some(BADGE_BLUE))); // general unread
+pub(crate) static ICON_RED: LazyLock<Image<'static>> = LazyLock::new(|| make_icon(Some(BADGE_RED))); // DM / mention
 
 // --- Windows taskbar overlay icon ------------------------------------------
 // The tray badge above covers the hidden-to-tray case. When the window is
-// visible on the taskbar we also overlay a small coloured badge on the taskbar
-// button via ITaskbarList3 (red = DM/mention, blue = other unread), stamped
-// with the unread DM/mention count when one is available.
+// visible on the taskbar we also overlay a coloured dot on its button
+// (red = DM/mention, blue = other unread).
 #[cfg(target_os = "windows")]
-const DIGITS_3X5: [[u8; 5]; 10] = [
-    [0b111, 0b101, 0b101, 0b101, 0b111], // 0
-    [0b010, 0b110, 0b010, 0b010, 0b111], // 1
-    [0b111, 0b001, 0b111, 0b100, 0b111], // 2
-    [0b111, 0b001, 0b111, 0b001, 0b111], // 3
-    [0b101, 0b101, 0b111, 0b001, 0b001], // 4
-    [0b111, 0b100, 0b111, 0b001, 0b111], // 5
-    [0b111, 0b100, 0b111, 0b101, 0b111], // 6
-    [0b111, 0b001, 0b010, 0b010, 0b010], // 7
-    [0b111, 0b101, 0b111, 0b101, 0b111], // 8
-    [0b111, 0b101, 0b111, 0b001, 0b111], // 9
-];
-
-#[cfg(target_os = "windows")]
-fn draw_overlay_digits(img: &mut image::RgbaImage, text: &str, size: i32) {
-    let chars: Vec<char> = text
-        .chars()
-        .filter(|c| c.is_ascii_digit() || *c == '+')
-        .collect();
-    if chars.is_empty() {
-        return;
-    }
-    let scale: i32 = if chars.len() <= 1 { 5 } else { 3 };
-    let glyph_w = 3 * scale;
-    let spacing = scale;
-    let total_w = chars.len() as i32 * glyph_w + (chars.len() as i32 - 1) * spacing;
-    let total_h = 5 * scale;
-    let mut x0 = (size - total_w) / 2;
-    let y0 = (size - total_h) / 2;
-    for ch in chars {
-        let rows: [u8; 5] = match ch {
-            '+' => [0b000, 0b010, 0b111, 0b010, 0b000],
-            d => DIGITS_3X5[(d as u8 - b'0') as usize],
-        };
-        for (ry, bits) in rows.iter().enumerate() {
-            for col in 0..3i32 {
-                if (bits >> (2 - col)) & 1 == 1 {
-                    for sy in 0..scale {
-                        for sx in 0..scale {
-                            let px = x0 + col * scale + sx;
-                            let py = y0 + ry as i32 * scale + sy;
-                            if px >= 0 && py >= 0 && px < size && py < size {
-                                img.put_pixel(
-                                    px as u32,
-                                    py as u32,
-                                    image::Rgba([255, 255, 255, 255]),
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        x0 += glyph_w + spacing;
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn make_overlay_rgba(color: [u8; 3], count: Option<u32>) -> (Vec<u8>, u32, u32) {
-    let size = TASKBAR_BADGE_ICON_SIZE;
-    let mut img = image::RgbaImage::from_pixel(size as u32, size as u32, image::Rgba([0, 0, 0, 0]));
-    let c = (size as f32) / 2.0;
-    let r = TASKBAR_BADGE_RADIUS.min(size as f32 / 2.0).max(1.0);
+pub(crate) fn overlay_icon(color: [u8; 3]) -> Image<'static> {
+    let size = TASKBAR_BADGE_ICON_SIZE as u32;
+    let mut img = image::RgbaImage::from_pixel(size, size, image::Rgba([0, 0, 0, 0]));
+    let c = size as f32 / 2.0;
+    let r = TASKBAR_BADGE_RADIUS.min(c).max(1.0);
     draw_badge_circle(&mut img, color, c, c, r, TASKBAR_BADGE_OUTLINE_WIDTH);
-    if let Some(n) = count {
-        if n >= 1 {
-            let text = if n <= 99 {
-                n.to_string()
-            } else {
-                "+".to_string()
-            };
-            draw_overlay_digits(&mut img, &text, size);
-        }
-    }
-    (img.into_raw(), size as u32, size as u32)
+    icon_from_image(img)
 }
 
 #[cfg(target_os = "windows")]
@@ -323,15 +244,8 @@ fn rgba_to_hicon(rgba: &[u8], w: u32, h: u32) -> Option<HICON> {
         bmi.bmiHeader.biBitCount = 32;
         // biCompression stays 0 (BI_RGB) from the zeroed struct.
         let mut bits: *mut core::ffi::c_void = std::ptr::null_mut();
-        let hbm_color = match CreateDIBSection(
-            HDC::default(),
-            &bmi,
-            DIB_RGB_COLORS,
-            &mut bits,
-            HANDLE::default(),
-            0,
-        ) {
-            Ok(b) if !bits.is_null() && b.0 != 0 => b,
+        let hbm_color = match CreateDIBSection(None, &bmi, DIB_RGB_COLORS, &mut bits, None, 0) {
+            Ok(b) if !bits.is_null() => b,
             _ => return None,
         };
         // Fill the DIB with BGRA pixels.
@@ -356,50 +270,8 @@ fn rgba_to_hicon(rgba: &[u8], w: u32, h: u32) -> Option<HICON> {
             hbmColor: hbm_color,
         };
         let hicon = CreateIconIndirect(&info);
-        let _ = DeleteObject(HGDIOBJ(hbm_color.0));
-        let _ = DeleteObject(HGDIOBJ(hbm_mask.0));
-        match hicon {
-            Ok(h) if h.0 != 0 => Some(h),
-            _ => None,
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-pub(crate) fn set_taskbar_overlay(
-    window: &tauri::Window,
-    color: Option<[u8; 3]>,
-    count: Option<u32>,
-) {
-    let raw = match window.hwnd() {
-        Ok(h) => h.0,
-        Err(_) => return,
-    };
-    let hwnd = HWND(raw);
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-        let taskbar: ITaskbarList3 =
-            match CoCreateInstance(&TaskbarList, None, CLSCTX_INPROC_SERVER) {
-                Ok(t) => t,
-                Err(_) => return,
-            };
-        if taskbar.HrInit().is_err() {
-            return;
-        }
-        match color {
-            Some(c) => {
-                let (rgba, w, h) = make_overlay_rgba(c, count);
-                match rgba_to_hicon(&rgba, w, h) {
-                    Some(hicon) => {
-                        let _ = taskbar.SetOverlayIcon(hwnd, hicon, PCWSTR::null());
-                        let _ = DestroyIcon(hicon);
-                    }
-                    None => {}
-                }
-            }
-            None => {
-                let _ = taskbar.SetOverlayIcon(hwnd, HICON::default(), PCWSTR::null());
-            }
-        }
+        let _ = DeleteObject(hbm_color.into());
+        let _ = DeleteObject(hbm_mask.into());
+        hicon.ok()
     }
 }

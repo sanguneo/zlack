@@ -1,0 +1,17 @@
+[[set]]
+identifier = "slack-ipc"
+description = "Zlack commands the remote Slack client may call. Granted to app.slack.com and slack.com in capabilities/slack.json, and at runtime to a workspace window's own host."
+permissions = [
+  "allow-notify",
+  "allow-update-notification-context",
+  "allow-save-image",
+  "allow-save-file",
+  "allow-open-downloads-folder",
+  "allow-load-user-css",
+  "allow-open-external-url",
+  "allow-update-badge",
+  "allow-update-workspace-meta",
+  "allow-workspace-status",
+  "allow-register-workspaces",
+  "allow-switch-workspace",
+]

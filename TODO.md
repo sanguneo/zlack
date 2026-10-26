@@ -26,7 +26,7 @@ still needs a real-screen check.
 - `SetOverlayIcon(...) -> Ok(())` **but nothing on the taskbar** → Windows setting, **not a bug**:
   Settings → Personalization → Taskbar → **"Show badges on taskbar buttons"** must be ON.
 - `SetOverlayIcon(...) -> Err(...)` → COM / icon-creation issue; fix in
-  `set_taskbar_overlay` / `rgba_to_hicon` (`src-tauri/src/main.rs`).
+  `overlay_icon` (`src-tauri/src/icons.rs`).
 - **No `[overlay]` lines at all** → state never became `mention`/`unread`; check title detection
   (`COUNT_MARKER` / `UNREAD_MARKER`) in `src-tauri/preload.js` against the current Slack tab-title
   format.

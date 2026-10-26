@@ -21,7 +21,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.0-dev build-essential curl wget file \
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
             libssl-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev
 
       - name: Setup Node
@@ -30,11 +30,8 @@ jobs:
           node-version: 18
           cache: npm
 
-      # Pinned to 1.92: Rust 1.93+ changed glob-import trait scoping, which breaks
-      # wry 0.24.11's `use webkit2gtk::{traits::*}` on the Linux (webkit2gtk) path
-      # used by Tauri v1. See tauri-apps/tauri#15149. Unpin after a Tauri v2 upgrade.
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@1.92
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
 

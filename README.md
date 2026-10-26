@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://github.com/sanguneo/zlack/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/sanguneo/zlack?style=flat-square&color=4A154B"></a>
   <a href="https://github.com/sanguneo/zlack/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-2EB67D?style=flat-square"></a>
-  <img alt="Tauri 1" src="https://img.shields.io/badge/Tauri-1-24C8DB?style=flat-square&logo=tauri&logoColor=white">
+  <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB?style=flat-square&logo=tauri&logoColor=white">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-native%20core-E01E5A?style=flat-square&logo=rust&logoColor=white">
 </p>
 
@@ -116,7 +116,8 @@ and external-link handling.
 ### Security boundaries
 
 - Remote Tauri IPC is scoped to Slack domains and Zlack-managed workspace
-  windows. New workspace windows accept only credential-free HTTPS URLs on
+  windows by `src-tauri/capabilities/slack.json`; commands not listed there are
+  denied. New workspace windows accept only credential-free HTTPS URLs on
   `slack.com` and its subdomains.
 - Zlack's external-link command accepts only credential-free HTTP(S) URLs and
   rejects file and custom protocols.
@@ -130,7 +131,7 @@ and external-link handling.
 
 - [Node.js 18 or newer](https://nodejs.org/)
 - [Rust and Cargo](https://rustup.rs/)
-- [Tauri 1 system prerequisites](https://tauri.app/v1/guides/getting-started/prerequisites)
+- [Tauri 2 system prerequisites](https://v2.tauri.app/start/prerequisites/)
 
 ### Run locally
 
@@ -162,6 +163,7 @@ src-tauri/
 │   ├── icons.rs            # runtime and unread badge icons
 │   ├── platform.rs         # platform notification/runtime integration
 │   └── security.rs         # URL and external-link boundaries
+├── capabilities/         # remote IPC permissions for Slack windows
 ├── Cargo.toml
 └── tauri.conf.json
 scripts/

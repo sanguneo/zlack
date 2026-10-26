@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://github.com/sanguneo/zlack/releases"><img alt="GitHub 릴리스" src="https://img.shields.io/github/v/release/sanguneo/zlack?style=flat-square&color=4A154B"></a>
   <a href="https://github.com/sanguneo/zlack/blob/main/LICENSE"><img alt="MIT 라이선스" src="https://img.shields.io/badge/license-MIT-2EB67D?style=flat-square"></a>
-  <img alt="Tauri 1" src="https://img.shields.io/badge/Tauri-1-24C8DB?style=flat-square&logo=tauri&logoColor=white">
+  <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB?style=flat-square&logo=tauri&logoColor=white">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-native%20core-E01E5A?style=flat-square&logo=rust&logoColor=white">
 </p>
 
@@ -134,7 +134,7 @@ flowchart LR
 
 - [Node.js 18 이상](https://nodejs.org/)
 - [Rust와 Cargo](https://rustup.rs/)
-- [Tauri 1 시스템 요구사항](https://tauri.app/v1/guides/getting-started/prerequisites)
+- [Tauri 2 시스템 요구사항](https://v2.tauri.app/start/prerequisites/)
 
 ### 로컬 실행
 
@@ -166,6 +166,7 @@ src-tauri/
 │   ├── icons.rs            # 런타임 및 안 읽음 배지 아이콘
 │   ├── platform.rs         # 플랫폼별 알림·런타임 연동
 │   └── security.rs         # URL 및 외부 링크 보안 경계
+├── capabilities/         # remote IPC permissions for Slack windows
 ├── Cargo.toml
 └── tauri.conf.json
 scripts/

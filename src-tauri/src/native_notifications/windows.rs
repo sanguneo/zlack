@@ -6,7 +6,7 @@ pub(super) fn show(
     title: String,
     body: String,
 ) {
-    let identifier = app_handle.config().tauri.bundle.identifier.clone();
+    let identifier = app_handle.config().identifier.clone();
     let activation_id = notification_id.clone();
     let failed_id = notification_id.clone();
     let scheduling_failed_id = notification_id;
