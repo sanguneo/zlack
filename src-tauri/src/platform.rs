@@ -1,6 +1,17 @@
 #[cfg(target_os = "windows")]
 use std::path::PathBuf;
 
+#[cfg(target_os = "linux")]
+mod linux_login;
+
+#[cfg(target_os = "linux")]
+pub(crate) fn configure_login_fallback(window: &tauri::Window) {
+    let _ = window.with_webview(|webview| linux_login::install(&webview.inner()));
+}
+
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn configure_login_fallback(_window: &tauri::Window) {}
+
 #[cfg(target_os = "windows")]
 const WINDOWS_DEFAULT_DOWNLOAD_FOLDER_NAME: &str = "Downloads";
 
