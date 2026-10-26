@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.6] - 2026-10-26
+
+### Fixed
+
+- **Adding a workspace on macOS** ([#9](https://github.com/sanguneo/zlack/issues/9), [#10](https://github.com/sanguneo/zlack/pull/10)): "Add a workspace", "Find workspaces", and the other sign-in flows Slack opens in a new window used to do nothing on macOS. They now open inside the Zlack window, so a second workspace can be signed in to without leaving the app. Only `https:` Slack URLs are opened in-app; anything else, including look-alike hosts, still goes to the external browser. Thanks to @abhishakenp.
+
 ## [1.5.5] - 2026-10-06
 
 ### Fixed

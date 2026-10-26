@@ -1,7 +1,7 @@
 {
   "name": "zlack",
   "private": true,
-  "version": "1.5.5",
+  "version": "1.5.6",
   "type": "module",
   "description": "A lightweight Slack desktop client built with Tauri",
   "author": {
