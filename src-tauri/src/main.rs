@@ -18,6 +18,7 @@ use tauri::{
     AppHandle, Manager, PhysicalPosition, PhysicalSize, Position, Size, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder, WindowEvent,
 };
+use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tauri_plugin_updater::UpdaterExt;
 
@@ -27,6 +28,7 @@ mod native_notifications;
 mod notifications;
 mod platform;
 mod security;
+mod sign_in;
 
 pub(crate) fn exe_sibling(name: &str) -> Option<PathBuf> {
     std::env::current_exe()
@@ -329,6 +331,8 @@ fn slack_window<'a>(
     label: &str,
     url: WebviewUrl,
 ) -> tauri::Result<WebviewWindowBuilder<'a, tauri::Wry, AppHandle>> {
+    let navigation_app = app.clone();
+    let navigation_label = label.to_string();
     WebviewWindowBuilder::new(app, label, url)
         .additional_browser_args(BROWSER_ARGS)
         .user_agent(user_agent())
@@ -337,6 +341,10 @@ fn slack_window<'a>(
         .resizable(true)
         .initialization_script(INIT_SCRIPT)
         .disable_drag_drop_handler()
+        .on_navigation(move |url| {
+            sign_in::allow_navigation(&navigation_app, &navigation_label, url)
+        })
+        .on_page_load(sign_in::on_page_load)
         .icon(icons::ICON_WINDOW.clone())
 }
 
@@ -941,11 +949,15 @@ fn main() {
 
     tauri::Builder::default()
         .manage(Mutex::new(WorkspaceState::default()))
+        .manage(Mutex::new(sign_in::SignInState::default()))
+        // With its deep-link feature, single-instance hands a slack:// argument
+        // of a second instance (Windows, Linux) to the deep-link plugin first.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             if let Some(window) = active_window(app) {
                 restore_window(&window);
             }
         }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .on_window_event(on_window_event)
@@ -967,6 +979,15 @@ fn main() {
             }
             icons::apply_window_icon(&window);
             build_tray(app)?;
+
+            let deep_link_handle = handle.clone();
+            app.deep_link().on_open_url(move |event| {
+                sign_in::handle_deep_links(&deep_link_handle, event.urls());
+            });
+            // A slack:// link that started Zlack arrived before the listener.
+            if let Ok(Some(urls)) = app.deep_link().get_current() {
+                sign_in::handle_deep_links(handle, urls);
+            }
 
             let handle = handle.clone();
             tauri::async_runtime::spawn(async move {

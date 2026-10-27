@@ -29,6 +29,11 @@
     }
   },
   "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["slack"]
+      }
+    },
     "updater": {
       "endpoints": [
         "https://github.com/sanguneo/zlack/releases/latest/download/latest.json"
