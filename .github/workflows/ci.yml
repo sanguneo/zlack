@@ -27,7 +27,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: 18
+          node-version: 22
           cache: npm
 
       - name: Setup Rust
@@ -55,3 +55,9 @@ jobs:
       # catches issues like a removed-but-still-needed dependency.
       - name: Compile (debug)
         run: cargo build --manifest-path src-tauri/Cargo.toml --verbose
+
+      - name: Rust unit tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Bridge script tests
+        run: npm test
