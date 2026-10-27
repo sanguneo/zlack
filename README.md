@@ -46,7 +46,9 @@ and low-overhead packaging through the system WebView.
 
 Download the latest package from
 [GitHub Releases](https://github.com/sanguneo/zlack/releases/latest), install it,
-then sign in to your Slack workspace.
+then sign in to your Slack workspace. Google and SSO sign-in continue in your
+default browser, as in the official Slack app, and Zlack signs you in when you
+finish there.
 
 | Platform | Packages            | Runtime note                                     |
 | -------- | ------------------- | ------------------------------------------------ |

@@ -15,8 +15,9 @@ cc = "1"
 base64 = "0.22"
 image = { version = "0.24", default-features = false, features = ["png", "ico"] }
 tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-deep-link = "2"
 tauri-plugin-dialog = "2"
-tauri-plugin-single-instance = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-updater = "2"
 open = "3"
 serde = { version = "1", features = ["derive"] }
@@ -25,6 +26,11 @@ url = "2"
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 notify-rust = "=4.11.7"
+
+# tauri-plugin-deep-link 2.6 builds ini::ParseOption with a struct literal,
+# which rust-ini 0.21.3 broke by adding fields (0.21.2 is yanked).
+[target.'cfg(target_os = "linux")'.dependencies]
+rust-ini = "=0.21.1"
 
 [target.'cfg(windows)'.dependencies]
 tauri-winrt-notification = "0.7.2"
