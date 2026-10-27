@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Windows taskbar badge**: The overlay dot uses Tauri's built-in `set_overlay_icon` in place of the hand-rolled `ITaskbarList3` code. The unused overlay digit renderer was removed.
 - **Updates from 1.5.x**: Updater bundles keep the v1 formats (`createUpdaterArtifacts: "v1Compatible"`), and releases are signed with the same key from the existing `TAURI_PRIVATE_KEY` / `TAURI_KEY_PASSWORD` secrets, so current installs update to this version as usual.
 
+### Fixed
+
+- **Signing in with Google or SSO** ([#13](https://github.com/sanguneo/zlack/issues/13)): Google refuses to sign in inside an embedded webview ("This browser or app may not be secure"), so "Sign in with Google" could never finish in Zlack. As in the official Slack desktop app, Google sign-in now continues in the default browser at `slack.com/ssb/signin`, and SAML single sign-on asks whether to continue there or stay in Zlack. When the browser sign-in finishes, Slack opens a `slack://…/magic-login/…` link; Zlack now handles the `slack://` scheme and redeems the link in its own window (`auth.loginMagicBulk`), so the new session sits next to the other workspaces. A rejected or expired link shows an error instead of doing nothing. If the official Slack app is installed too, the browser may hand the link to it instead; email sign-in still works inside Zlack.
+
 ## [1.5.6] - 2026-10-26
 
 ### Fixed
