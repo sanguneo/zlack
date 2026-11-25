@@ -69,24 +69,44 @@ jobs:
       # Ubuntu 22.04+ etc.). linuxdeploy prefers a plugin AppImage placed next to
       # it in Tauri's tools cache, so drop in a plugin built on the new
       # appimagetool, which embeds the static type2-runtime (no libfuse2 needed).
-      - name: Use AppImage plugin with the static (libfuse2-free) runtime
+      # The GTK script is pinned to a reviewed commit instead of the moving
+      # master branch. Both downloads are checked against hashes recorded in
+      # ci/pinned-tools.sha256 before anything is patched or executed, so a
+      # changed upstream artifact fails the job before the signing step.
+      - name: Install pinned AppImage and GTK plugins
         if: matrix.platform == 'ubuntu-22.04'
         run: |
+          set -euo pipefail
           mkdir -p ~/.cache/tauri
-          wget -q -O ~/.cache/tauri/linuxdeploy-plugin-appimage-x86_64.AppImage \
-            https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-appimage-x86_64.AppImage
-          chmod +x ~/.cache/tauri/linuxdeploy-plugin-appimage-x86_64.AppImage
-
-      # linuxdeploy-plugin-gtk forces `GDK_BACKEND=x11` in the AppImage runtime hook,
-      # which makes the UI tiny on HiDPI Wayland compositors. Apply the same patch
-      # as build_dist.sh (prefer Wayland; ZLACK_GDK_BACKEND=x11 forces X11), with a
-      # far-future mtime so the bundler's `wget -N` keeps the patched copy.
-      - name: Patch GTK plugin to prefer Wayland (HiDPI)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
+          APPIMAGE_PATH=~/.cache/tauri/linuxdeploy-plugin-appimage-x86_64.AppImage
           GTK_PLUGIN_PATH=~/.cache/tauri/linuxdeploy-plugin-gtk.sh
-          wget -q -O "$GTK_PLUGIN_PATH" https://raw.githubusercontent.com/tauri-apps/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh
-          chmod +x "$GTK_PLUGIN_PATH"
+          APPIMAGE_URL=https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-appimage-x86_64.AppImage
+          GTK_URL=https://raw.githubusercontent.com/tauri-apps/linuxdeploy-plugin-gtk/dda522bce37387f1b853d9095713bfaa924c8423/linuxdeploy-plugin-gtk.sh
+          wget -q -O "$APPIMAGE_PATH" "$APPIMAGE_URL"
+          wget -q -O "$GTK_PLUGIN_PATH" "$GTK_URL"
+          python3 - "$APPIMAGE_PATH" "$GTK_PLUGIN_PATH" <<'PY'
+          import hashlib, pathlib, sys
+
+          recorded = {}
+          for line in pathlib.Path("ci/pinned-tools.sha256").read_text(encoding="utf-8").splitlines():
+              line = line.strip()
+              if not line or line.startswith("#"):
+                  continue
+              digest, name = line.split(maxsplit=1)
+              recorded[name] = digest
+          for path in map(pathlib.Path, sys.argv[1:]):
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              want = recorded.get(path.name)
+              if digest != want:
+                  sys.exit(f"pinned tool hash mismatch for {path.name}: got {digest}, want {want}")
+              print(f"pinned tool hash ok: {path.name} {digest}")
+          PY
+          chmod +x "$APPIMAGE_PATH" "$GTK_PLUGIN_PATH"
+          # linuxdeploy-plugin-gtk forces GDK_BACKEND=x11 in the AppImage runtime
+          # hook, which makes the UI tiny on HiDPI Wayland compositors. Apply the
+          # same patch as build_dist.sh (prefer Wayland; ZLACK_GDK_BACKEND=x11
+          # forces X11), with a far-future mtime so the bundler's wget -N keeps
+          # the patched copy. The hash above covers the unpatched download.
           sed -i 's/^export GDK_BACKEND=x11.*/export GDK_BACKEND="${ZLACK_GDK_BACKEND:-wayland,x11}" # Prefer Wayland; set ZLACK_GDK_BACKEND=x11 to force X11/' "$GTK_PLUGIN_PATH"
           grep -q 'ZLACK_GDK_BACKEND' "$GTK_PLUGIN_PATH"
           touch -d '2038-01-01 00:00:00' "$GTK_PLUGIN_PATH"
