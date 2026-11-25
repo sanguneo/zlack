@@ -475,16 +475,16 @@ fn sync_hidden_workspace_geometry(app: &tauri::AppHandle, source: &tauri::Window
 }
 
 pub(crate) fn switch_to_workspace(app: &tauri::AppHandle, team: &str, url: Option<String>) {
-    // Validate URL before proceeding - same validation as for new windows
+    // Check the destination before touching any window or the active state: an
+    // existing window skips create_workspace_window's check, and the script below
+    // would assign the URL to window.location. A rejected URL keeps the screen.
     let validated_url = match url {
-        Some(ref url_str) => security::parse_slack_url(url_str).map(|_| url_str.clone()),
+        Some(url) => match security::workspace_switch_url(team, &url) {
+            Some(url) => Some(String::from(url)),
+            None => return,
+        },
         None => None,
     };
-
-    // If URL validation failed, keep current screen
-    if url.is_some() && validated_url.is_none() {
-        return;
-    }
 
     let target_label = match ensure_workspace_window(app, team, validated_url.clone()) {
         Some(label) => label,
