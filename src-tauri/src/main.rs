@@ -122,7 +122,7 @@ struct WorkspaceStatus {
 
 const MAX_LOADED_WORKSPACES: usize = 2;
 const TRAY_ID: &str = "main";
-const BROWSER_ARGS: &str = "--disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding";
+pub(crate) const BROWSER_ARGS: &str = "--disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding";
 const INIT_SCRIPT: &str = concat!(
     include_str!("../notification-bridge.cjs"),
     "\n",
@@ -917,6 +917,9 @@ fn on_window_event(window: &tauri::Window, event: &WindowEvent) {
     let label = window.label().to_string();
     match event {
         WindowEvent::CloseRequested { api, .. } => {
+            if sign_in::is_auth_window(&label) {
+                return;
+            }
             let closing_for_eviction = app
                 .try_state::<Mutex<WorkspaceState>>()
                 .map(|state| state.lock().unwrap().closing_labels.contains(&label))
@@ -928,6 +931,7 @@ fn on_window_event(window: &tauri::Window, event: &WindowEvent) {
             }
         }
         WindowEvent::Destroyed => {
+            sign_in::on_window_destroyed(app, &label);
             if let Some(state) = app.try_state::<Mutex<WorkspaceState>>() {
                 forget_workspace_label(&mut state.lock().unwrap(), &label);
             }

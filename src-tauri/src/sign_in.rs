@@ -10,13 +10,24 @@
 
 use crate::security;
 use serde::Deserialize;
-use std::{collections::BTreeMap, sync::Mutex, time::Duration};
+use std::{
+    collections::BTreeMap,
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 use tauri::{
     webview::{PageLoadEvent, PageLoadPayload},
-    AppHandle, Manager, WebviewWindow,
+    AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
-use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_dialog::{
+    DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult,
+};
 use url::Url;
+
+mod session;
+
+pub(crate) use session::SignInState;
+use session::{AttemptId, AttemptOrigin, CallbackDecision, Exchange};
 
 // Slack's sign-in page for desktop apps: signing in there ends with a
 // `slack://` magic link instead of the web client.
@@ -24,20 +35,15 @@ const BROWSER_SIGN_IN_URL: &str = "https://slack.com/ssb/signin";
 const CLIENT_URL: &str = "https://app.slack.com/client";
 const MAGIC_LOGIN_PATH: &str = "/api/auth.loginMagicBulk";
 const MAGIC_LOGIN_TIMEOUT: Duration = Duration::from_secs(60);
+const BROWSER_ATTEMPT_LIFETIME: Duration = Duration::from_secs(10 * 60);
+const CALLBACK_DEDUP_LIFETIME: Duration = Duration::from_secs(10 * 60);
+const SIGN_IN_HERE_LIFETIME: Duration = Duration::from_secs(2 * 60);
 const BROWSER_SIGN_IN_TOAST_JS: &str = "typeof zlackPageToast === 'function' && zlackPageToast('Sign-in continues in your browser. Zlack signs you in when you finish there.');";
 // The API answers with JSON, which the webview shows as text in a <pre>.
 const READ_RESPONSE_JS: &str = "(function () { var pre = document.querySelector('body > pre') || document.querySelector('pre'); return (pre ? pre.textContent : (document.body ? document.body.innerText : '')) || ''; })()";
 
-#[derive(Default)]
-pub(crate) struct SignInState {
-    next_login_id: u64,
-    pending_login: Option<PendingLogin>,
-    sso_start_allowed_in_app: Option<Url>,
-}
-
-struct PendingLogin {
-    id: u64,
-    window_label: String,
+pub(crate) fn is_auth_window(label: &str) -> bool {
+    AttemptId::from_auth_window_label(label).is_some()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,7 +99,7 @@ pub(crate) enum MagicLink {
     UnsupportedHost(String),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MagicLogin {
     api_base: Url,
     tokens: Vec<String>,
@@ -118,6 +124,26 @@ impl MagicLogin {
             .fold(self.request_url().to_string(), |url, token| {
                 url.replace(token, &redact_token(token))
             })
+    }
+
+    fn workspace_description(&self) -> String {
+        let teams = self
+            .tokens
+            .iter()
+            .filter_map(|token| {
+                token
+                    .strip_prefix("z-app-")
+                    .and_then(|rest| rest.split_once('-'))
+                    .map(|(team, _)| team)
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let host = self.api_base.host_str().unwrap_or("Slack");
+        if teams.is_empty() {
+            host.to_owned()
+        } else {
+            format!("{teams} on {host}")
+        }
     }
 }
 
@@ -293,13 +319,14 @@ pub(crate) fn magic_login_outcome(body: &str) -> MagicLoginOutcome {
         );
     }
     let results = &response.token_results;
-    if let Some(redirect) = results.values().find_map(|result| {
-        result
-            .auth_redir
-            .as_deref()
-            .and_then(security::parse_external_url)
-    }) {
-        return MagicLoginOutcome::ContinueInBrowser(redirect);
+    if let Some(redirect) = results
+        .values()
+        .find_map(|result| result.auth_redir.as_deref())
+    {
+        return match security::parse_auth_redirect(redirect) {
+            Some(redirect) => MagicLoginOutcome::ContinueInBrowser(redirect),
+            None => MagicLoginOutcome::Failed("invalid_auth_redirect".to_owned()),
+        };
     }
     if results.is_empty() || results.values().any(|result| result.ok) {
         return MagicLoginOutcome::SignedIn;
@@ -319,14 +346,7 @@ pub(crate) fn allow_navigation(app: &AppHandle, label: &str, url: &Url) -> bool 
     {
         let state = app.state::<Mutex<SignInState>>();
         let mut state = state.lock().unwrap();
-        if state
-            .sso_start_allowed_in_app
-            .as_ref()
-            .is_some_and(|allowed| {
-                allowed.host_str() == url.host_str() && allowed.path() == url.path()
-            })
-        {
-            state.sso_start_allowed_in_app = None;
+        if state.allow_sign_in_here(label, url, Instant::now()) {
             return true;
         }
     }
@@ -345,7 +365,29 @@ pub(crate) fn allow_navigation(app: &AppHandle, label: &str, url: &Url) -> bool 
     false
 }
 
+fn attempt_origin(app: &AppHandle, label: &str) -> AttemptOrigin {
+    let return_url = app
+        .get_webview_window(label)
+        .and_then(|window| window.url().ok())
+        .and_then(|url| security::parse_slack_url(url.as_str()))
+        .or_else(|| Url::parse(CLIENT_URL).ok())
+        .unwrap_or_else(|| CLIENT_URL.parse().unwrap());
+    AttemptOrigin {
+        window_label: label.to_owned(),
+        return_url,
+    }
+}
+
 fn open_browser_sign_in(app: &AppHandle, label: &str) {
+    let attempt_id = app
+        .state::<Mutex<SignInState>>()
+        .lock()
+        .unwrap()
+        .record_browser_attempt(
+            attempt_origin(app, label),
+            Instant::now(),
+            BROWSER_ATTEMPT_LIFETIME,
+        );
     match open::that(BROWSER_SIGN_IN_URL) {
         Ok(()) => {
             if let Some(window) = app.get_webview_window(label) {
@@ -353,6 +395,10 @@ fn open_browser_sign_in(app: &AppHandle, label: &str) {
             }
         }
         Err(error) => {
+            app.state::<Mutex<SignInState>>()
+                .lock()
+                .unwrap()
+                .remove_browser_attempt(attempt_id);
             eprintln!("Zlack: Failed to open the browser for sign-in: {error}");
             show_error(
                 app,
@@ -375,22 +421,40 @@ fn ask_where_to_sign_in(app: AppHandle, label: String, url: Url) {
             "Single sign-on continues in your default browser, as in the Slack desktop app. Zlack signs you in when you finish there.\n\nIf your browser hands the sign-in to another Slack app instead, choose Sign In Here.",
         )
         .title("Sign in with SSO")
-        .buttons(MessageDialogButtons::OkCancelCustom(
+        .buttons(MessageDialogButtons::YesNoCancelCustom(
             "Open Browser".into(),
             "Sign In Here".into(),
+            "Cancel".into(),
         ))
-        .show(move |open_browser| {
-            if open_browser {
+        .show_with_result(move |result| match result {
+            MessageDialogResult::Custom(choice) if choice == "Open Browser" => {
                 open_browser_sign_in(&app, &label);
-                return;
             }
-            if let Some(window) = app.get_webview_window(&label) {
-                app.state::<Mutex<SignInState>>()
-                    .lock()
-                    .unwrap()
-                    .sso_start_allowed_in_app = Some(url.clone());
-                let _ = window.navigate(url);
+            MessageDialogResult::Custom(choice) if choice == "Sign In Here" => {
+                if let Some(window) = app.get_webview_window(&label) {
+                    app.state::<Mutex<SignInState>>()
+                        .lock()
+                        .unwrap()
+                        .allow_next_sign_in_here(
+                            label.clone(),
+                            url.clone(),
+                            Instant::now(),
+                            SIGN_IN_HERE_LIFETIME,
+                        );
+                    if let Err(error) = window.navigate(url) {
+                        app.state::<Mutex<SignInState>>()
+                            .lock()
+                            .unwrap()
+                            .clear_sign_in_here(&label);
+                        eprintln!("Zlack: SSO navigation failed: {error}");
+                    }
+                }
             }
+            MessageDialogResult::Cancel
+            | MessageDialogResult::Ok
+            | MessageDialogResult::Yes
+            | MessageDialogResult::No
+            | MessageDialogResult::Custom(_) => {}
         });
 }
 
@@ -400,7 +464,7 @@ fn ask_where_to_sign_in(app: AppHandle, label: String, url: Url) {
 pub(crate) fn handle_deep_links(app: &AppHandle, urls: Vec<Url>) {
     for url in urls {
         match parse_magic_link(&url) {
-            Some(MagicLink::Login(login)) => start_magic_login(app, &login),
+            Some(MagicLink::Login(login)) => submit_magic_login(app, login),
             Some(MagicLink::UnsupportedHost(host)) => {
                 eprintln!("Zlack: Magic login: unsupported Slack domain {host:?}");
                 show_error(
@@ -422,30 +486,104 @@ pub(crate) fn handle_deep_links(app: &AppHandle, urls: Vec<Url>) {
     }
 }
 
-fn start_magic_login(app: &AppHandle, login: &MagicLogin) {
+fn submit_magic_login(app: &AppHandle, login: MagicLogin) {
     let Some(window) = crate::active_window(app) else {
         eprintln!("Zlack: Magic login: no window to sign in with");
         return;
     };
-    let id = {
-        let state = app.state::<Mutex<SignInState>>();
-        let mut state = state.lock().unwrap();
-        state.next_login_id += 1;
-        state.pending_login = Some(PendingLogin {
-            id: state.next_login_id,
-            window_label: window.label().to_owned(),
-        });
-        state.next_login_id
+    let fallback_origin = AttemptOrigin {
+        window_label: window.label().to_owned(),
+        return_url: window
+            .url()
+            .ok()
+            .and_then(|url| security::parse_slack_url(url.as_str()))
+            .or_else(|| Url::parse(CLIENT_URL).ok())
+            .unwrap_or_else(|| CLIENT_URL.parse().unwrap()),
     };
+    let decision = app
+        .state::<Mutex<SignInState>>()
+        .lock()
+        .unwrap()
+        .submit_callback(
+            login,
+            fallback_origin,
+            Instant::now(),
+            CALLBACK_DEDUP_LIFETIME,
+        );
+    match decision {
+        CallbackDecision::Duplicate => {
+            eprintln!("Zlack: Magic login: ignored duplicate callback");
+        }
+        CallbackDecision::Queued => {
+            eprintln!("Zlack: Magic login: queued behind the active exchange");
+        }
+        CallbackDecision::Start(exchange) => start_magic_login(app, exchange),
+        CallbackDecision::NeedsConfirmation(exchange) => confirm_unstarted_login(app, exchange),
+    }
+}
+
+fn confirm_unstarted_login(app: &AppHandle, exchange: Exchange) {
+    let workspace = exchange.login.workspace_description();
+    let dialog_app = app.clone();
+    app.dialog()
+        .message(format!(
+            "Zlack did not start this sign-in, or it restarted before the sign-in finished. Sign in to {workspace}?"
+        ))
+        .title("Confirm Slack sign-in")
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            "Sign In".into(),
+            "Cancel".into(),
+        ))
+        .show(move |approved| {
+            if !approved {
+                dialog_app
+                    .state::<Mutex<SignInState>>()
+                    .lock()
+                    .unwrap()
+                    .reject_callback(&exchange);
+                return;
+            }
+            let decision = dialog_app
+                .state::<Mutex<SignInState>>()
+                .lock()
+                .unwrap()
+                .confirm_callback(exchange);
+            match decision {
+                CallbackDecision::Start(exchange) => start_magic_login(&dialog_app, exchange),
+                CallbackDecision::Queued => {
+                    eprintln!("Zlack: Magic login: queued confirmed callback");
+                }
+                CallbackDecision::Duplicate => {}
+                CallbackDecision::NeedsConfirmation(exchange) => {
+                    dialog_app
+                        .state::<Mutex<SignInState>>()
+                        .lock()
+                        .unwrap()
+                        .reject_callback(&exchange);
+                }
+            }
+        });
+}
+
+fn start_magic_login(app: &AppHandle, exchange: Exchange) {
+    let id = exchange.id;
+    let label = id.auth_window_label();
+    let request_url = exchange.login.request_url();
     eprintln!(
-        "Zlack: Magic login: loading {} in window {}",
-        login.redacted_request_url(),
-        window.label()
+        "Zlack: Magic login: loading {} in isolated window {}",
+        exchange.login.redacted_request_url(),
+        label
     );
-    crate::restore_window(&window);
-    if let Err(error) = window.navigate(login.request_url()) {
-        take_pending_login(app, id);
-        eprintln!("Zlack: Magic login: navigation failed: {error}");
+    let built = WebviewWindowBuilder::new(app, &label, WebviewUrl::External(request_url))
+        .additional_browser_args(crate::BROWSER_ARGS)
+        .user_agent(crate::user_agent())
+        .visible(false)
+        .skip_taskbar(true)
+        .on_page_load(on_page_load)
+        .build();
+    if let Err(error) = built {
+        finish_magic_login(app, id, None);
+        eprintln!("Zlack: Magic login: auth window failed: {error}");
         show_error(
             app,
             "Zlack could not finish signing in to Slack. Sign in again.",
@@ -456,7 +594,7 @@ fn start_magic_login(app: &AppHandle, login: &MagicLogin) {
     let app = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(MAGIC_LOGIN_TIMEOUT);
-        if take_pending_login(&app, id).is_some() {
+        if finish_magic_login(&app, id, None) {
             eprintln!("Zlack: Magic login: no response");
             show_error(
                 &app,
@@ -464,20 +602,6 @@ fn start_magic_login(app: &AppHandle, login: &MagicLogin) {
             );
         }
     });
-}
-
-fn take_pending_login(app: &AppHandle, id: u64) -> Option<PendingLogin> {
-    let state = app.state::<Mutex<SignInState>>();
-    let mut state = state.lock().unwrap();
-    if state
-        .pending_login
-        .as_ref()
-        .is_some_and(|pending| pending.id == id)
-    {
-        state.pending_login.take()
-    } else {
-        None
-    }
 }
 
 fn is_magic_login_response(url: &Url) -> bool {
@@ -488,53 +612,86 @@ pub(crate) fn on_page_load(window: WebviewWindow, payload: PageLoadPayload<'_>) 
     if payload.event() != PageLoadEvent::Finished || !is_magic_login_response(payload.url()) {
         return;
     }
+    let Some(id) = AttemptId::from_auth_window_label(window.label()) else {
+        return;
+    };
     let app = window.app_handle().clone();
-    let pending = app
+    if !app
         .state::<Mutex<SignInState>>()
         .lock()
         .unwrap()
-        .pending_login
-        .as_ref()
-        .filter(|pending| pending.window_label == window.label())
-        .map(|pending| pending.id);
-    let Some(id) = pending else {
+        .response_matches(id, payload.url())
+    {
         return;
-    };
-    let label = window.label().to_owned();
+    }
     let callback_app = app.clone();
     let read = window.eval_with_callback(READ_RESPONSE_JS, move |result| {
-        finish_magic_login(&callback_app, &label, id, &result)
+        finish_magic_login(&callback_app, id, Some(&result));
     });
     if let Err(error) = read {
         eprintln!("Zlack: Magic login: could not read the response: {error}");
-        finish_magic_login(&app, window.label(), id, "");
+        finish_magic_login(&app, id, Some(""));
     }
 }
 
-fn finish_magic_login(app: &AppHandle, label: &str, id: u64, result: &str) {
-    if take_pending_login(app, id).is_none() {
-        return;
-    }
-    // The script's return value arrives JSON-encoded.
-    let body = serde_json::from_str::<String>(result).unwrap_or_else(|_| result.to_owned());
-    match magic_login_outcome(&body) {
-        MagicLoginOutcome::SignedIn => eprintln!("Zlack: Magic login: signed in"),
-        MagicLoginOutcome::ContinueInBrowser(redirect) => {
-            eprintln!("Zlack: Magic login: Slack asked to continue in the browser");
-            if let Err(error) = open::that(redirect.as_str()) {
-                eprintln!("Zlack: Failed to open the browser for sign-in: {error}");
+fn finish_magic_login(app: &AppHandle, id: AttemptId, result: Option<&str>) -> bool {
+    let completed = app
+        .state::<Mutex<SignInState>>()
+        .lock()
+        .unwrap()
+        .complete(id);
+    let Some((completed, next)) = completed else {
+        return false;
+    };
+    if let Some(result) = result {
+        // The script's return value arrives JSON-encoded.
+        let body = serde_json::from_str::<String>(result).unwrap_or_else(|_| result.to_owned());
+        match magic_login_outcome(&body) {
+            MagicLoginOutcome::SignedIn => eprintln!("Zlack: Magic login: signed in"),
+            MagicLoginOutcome::ContinueInBrowser(redirect) => {
+                eprintln!("Zlack: Magic login: Slack asked to continue in the browser");
+                if let Err(error) = open::that(redirect.as_str()) {
+                    eprintln!("Zlack: Failed to open the browser for sign-in: {error}");
+                }
+            }
+            MagicLoginOutcome::Failed(error) => {
+                eprintln!("Zlack: Magic login: failed: {error}");
+                show_error(
+                    app,
+                    &format!(
+                        "Zlack could not finish signing in to Slack ({error}). Sign in again."
+                    ),
+                );
             }
         }
-        MagicLoginOutcome::Failed(error) => {
-            eprintln!("Zlack: Magic login: failed: {error}");
-            show_error(
-                app,
-                &format!("Zlack could not finish signing in to Slack ({error}). Sign in again."),
-            );
-        }
     }
-    if let (Some(window), Ok(client)) = (app.get_webview_window(label), Url::parse(CLIENT_URL)) {
-        let _ = window.navigate(client);
+    if let Some(auth_window) = app.get_webview_window(&id.auth_window_label()) {
+        let _ = auth_window.close();
+    }
+    if let Some(window) = app.get_webview_window(&completed.origin.window_label) {
+        let return_url = if completed.origin.return_url.path().starts_with("/client") {
+            completed.origin.return_url
+        } else {
+            Url::parse(CLIENT_URL).unwrap()
+        };
+        if window.url().ok().as_ref() != Some(&return_url) {
+            let _ = window.navigate(return_url);
+        }
+        crate::restore_window(&window);
+    }
+    if let Some(next) = next {
+        start_magic_login(app, next);
+    }
+    true
+}
+
+pub(crate) fn on_window_destroyed(app: &AppHandle, label: &str) {
+    app.state::<Mutex<SignInState>>()
+        .lock()
+        .unwrap()
+        .clear_sign_in_here(label);
+    if let Some(id) = AttemptId::from_auth_window_label(label) {
+        finish_magic_login(app, id, None);
     }
 }
 
@@ -784,6 +941,23 @@ mod tests {
                 Url::parse("https://acme.slack.com/sso/saml/start?redir=%2F").unwrap()
             )
         );
+    }
+
+    #[test]
+    fn unreviewed_auth_redirect_fails_the_login() {
+        for redirect in [
+            "http://acme.slack.com/sso/saml/start",
+            "https://id.example.com/saml/start",
+            "https://acme.slack.com/client/T123",
+        ] {
+            assert_eq!(
+                magic_login_outcome(&format!(
+                    r#"{{"ok":true,"token_results":{{"z-app-T1-a":{{"ok":true,"auth_redir":"{redirect}"}}}}}}"#
+                )),
+                MagicLoginOutcome::Failed("invalid_auth_redirect".to_owned()),
+                "{redirect}"
+            );
+        }
     }
 
     #[test]
