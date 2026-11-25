@@ -10,7 +10,7 @@ const classify = (href) => navigation.classify(href, BASE);
 const preload = readFileSync(require.resolve("../src-tauri/preload.js"), "utf8");
 const navigationScript = preload.slice(
   preload.indexOf("const ZLACK_SLACK_HOST_RE"),
-  preload.indexOf("const ZLACK_MAX_DOWNLOAD_BYTES"),
+  preload.indexOf("// 5. Slack attachment downloads"),
 );
 
 function createWindow(nativeWindow = null) {

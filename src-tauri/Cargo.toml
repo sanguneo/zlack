@@ -13,6 +13,7 @@ cc = "1"
 
 [dependencies]
 base64 = "0.22"
+getrandom = "0.4"
 image = { version = "0.24", default-features = false, features = ["png", "ico"] }
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"

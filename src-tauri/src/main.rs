@@ -128,6 +128,8 @@ const INIT_SCRIPT: &str = concat!(
     "\n",
     include_str!("../download-names.cjs"),
     "\n",
+    include_str!("../download-transfer.cjs"),
+    "\n",
     include_str!("../slack-navigation.cjs"),
     "\n",
     include_str!("../preload.js")
@@ -952,6 +954,7 @@ fn main() {
 
     tauri::Builder::default()
         .manage(Mutex::new(WorkspaceState::default()))
+        .manage(downloads::DownloadState::default())
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             if let Some(window) = active_window(app) {
                 restore_window(&window);
@@ -990,8 +993,12 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             native_notifications::notify,
             native_notifications::update_notification_context,
+            downloads::authorize_download,
             downloads::save_image,
-            downloads::save_file,
+            downloads::start_file_download,
+            downloads::write_file_chunk,
+            downloads::finish_file_download,
+            downloads::cancel_file_download,
             downloads::open_downloads_folder,
             load_user_css,
             security::open_external_url,

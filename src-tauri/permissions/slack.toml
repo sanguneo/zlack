@@ -4,8 +4,12 @@ description = "Zlack commands the remote Slack client may call. Granted to app.s
 permissions = [
   "allow-notify",
   "allow-update-notification-context",
+  "allow-authorize-download",
   "allow-save-image",
-  "allow-save-file",
+  "allow-start-file-download",
+  "allow-write-file-chunk",
+  "allow-finish-file-download",
+  "allow-cancel-file-download",
   "allow-open-downloads-folder",
   "allow-load-user-css",
   "allow-open-external-url",
