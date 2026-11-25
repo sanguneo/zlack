@@ -565,7 +565,15 @@ fn confirm_unstarted_login(app: &AppHandle, exchange: Exchange) {
         });
 }
 
+// The next queued exchange starts from window-event and eval callbacks, which
+// run on the main thread, where building a webview window deadlocks on Windows
+// (tauri#4121). Build every auth window from its own thread instead.
 fn start_magic_login(app: &AppHandle, exchange: Exchange) {
+    let app = app.clone();
+    std::thread::spawn(move || open_magic_login_window(&app, exchange));
+}
+
+fn open_magic_login_window(app: &AppHandle, exchange: Exchange) {
     let id = exchange.id;
     let label = id.auth_window_label();
     let request_url = exchange.login.request_url();
