@@ -5,17 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.7.0] - 2026-11-25
+
+### Security
+
+- **Workspace switching** ([#16](https://github.com/sanguneo/zlack/pull/16)): `switch_workspace` now checks its destination in Rust before touching any window, including a workspace window that is already open. The URL must be an HTTPS Slack `/client/<team>` page of the workspace being switched to; anything else leaves the current screen as it is. Before, an already-open window skipped the check and the URL went straight into `window.location`.
+- **Downloads need your approval** ([#17](https://github.com/sanguneo/zlack/pull/17)): Saving an image or attachment asks once in a native dialog that names the file. The approval is a one-time token bound to that window and file name, so a script in the page cannot write to Downloads on its own.
+- **Pinned release tools** ([#15](https://github.com/sanguneo/zlack/pull/15)): The Linux release job pins the GTK plugin to a reviewed commit and checks both downloaded packaging tools against SHA-256 hashes in `ci/pinned-tools.sha256` before it patches or runs them, ahead of the signing step.
+
+### Fixed
+
+- **Existing files are never overwritten** ([#17](https://github.com/sanguneo/zlack/pull/17)): Saves open the target with exclusive create and move on to `name (1)`, `name (2)`, … on a collision; when every name up to `(9999)` is taken the save fails instead of reusing an existing path.
+- **Large attachments** ([#17](https://github.com/sanguneo/zlack/pull/17)): Attachments stream to disk in 256 KiB chunks through a temporary file instead of crossing IPC as one base64 payload. The 256 MiB limit is checked while receiving, and a cancelled or failed download removes its partial file.
+- **Signing in with Google or SSO** ([#13](https://github.com/sanguneo/zlack/issues/13), [#14](https://github.com/sanguneo/zlack/pull/14)): Google refuses to sign in inside an embedded webview, so "Sign in with Google" could never finish in Zlack. As in the official Slack desktop app, Google sign-in now continues in the default browser at `slack.com/ssb/signin`, and SAML single sign-on asks whether to continue there or stay in Zlack. Zlack handles the `slack://` magic-login link that the browser hands back: it asks you to confirm the workspace, redeems the link once in a separate hidden window, ignores duplicate and late callbacks, and returns to the channel you were on. If the official Slack app is installed too, the browser may hand the link to it instead; the README explains how to choose Zlack as the `slack://` handler. Email sign-in still works inside Zlack.
+
+### Changed
+
+- **CI runs the tests** ([#15](https://github.com/sanguneo/zlack/pull/15)): Pull requests on Windows, macOS and Linux now run `cargo test --locked` and the Node tests (`npm test`) after Clippy and the build.
+- **Version sync fails loudly** ([#15](https://github.com/sanguneo/zlack/pull/15)): `scripts/update-version.js` updates only the `[package]` version in `Cargo.toml` and exits with an error when a version is missing or was not written.
+
+## [1.6.0] - 2026-10-27
 
 ### Changed
 
 - **Tauri 2**: Migrated from Tauri 1 to Tauri 2. Remote IPC for Slack windows is now granted through `src-tauri/capabilities/slack.json` (app.slack.com and slack.com) plus a runtime capability for a workspace window's own host, the same domains as before; any command not listed is denied. The tray, updater (`tauri-plugin-updater` with an install prompt), and single-instance handling use the v2 APIs. Linux builds now need `webkit2gtk-4.1`, and the Rust toolchain is no longer pinned to 1.92.
 - **Windows taskbar badge**: The overlay dot uses Tauri's built-in `set_overlay_icon` in place of the hand-rolled `ITaskbarList3` code. The unused overlay digit renderer was removed.
 - **Updates from 1.5.x**: Updater bundles keep the v1 formats (`createUpdaterArtifacts: "v1Compatible"`), and releases are signed with the same key from the existing `TAURI_PRIVATE_KEY` / `TAURI_KEY_PASSWORD` secrets, so current installs update to this version as usual.
-
-### Fixed
-
-- **Signing in with Google or SSO** ([#13](https://github.com/sanguneo/zlack/issues/13)): Google refuses to sign in inside an embedded webview ("This browser or app may not be secure"), so "Sign in with Google" could never finish in Zlack. As in the official Slack desktop app, Google sign-in now continues in the default browser at `slack.com/ssb/signin`, and SAML single sign-on asks whether to continue there or stay in Zlack. When the browser sign-in finishes, Slack opens a `slack://…/magic-login/…` link; Zlack now handles the `slack://` scheme and redeems the link in its own window (`auth.loginMagicBulk`), so the new session sits next to the other workspaces. A rejected or expired link shows an error instead of doing nothing. If the official Slack app is installed too, the browser may hand the link to it instead; email sign-in still works inside Zlack.
 
 ## [1.5.6] - 2026-10-26
 
