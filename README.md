@@ -46,7 +46,17 @@ and low-overhead packaging through the system WebView.
 
 Download the latest package from
 [GitHub Releases](https://github.com/sanguneo/zlack/releases/latest), install it,
-then sign in to your Slack workspace.
+then sign in to your Slack workspace. Google and SSO sign-in continue in your
+default browser, as in the official Slack app, and Zlack signs you in when you
+finish there.
+
+If the official Slack app is installed too, your operating system may open
+`slack://` sign-in links in Slack instead of Zlack. Choose Zlack as the default
+handler when prompted. You can also change the protocol handler in system
+settings: **Apps > Default apps > Choose defaults by link type** on Windows,
+the browser's external-protocol prompt on macOS, or your desktop environment's
+**Default Applications / URI Schemes** settings on Linux. Restart the browser
+sign-in after changing the handler.
 
 | Platform | Packages            | Runtime note                                     |
 | -------- | ------------------- | ------------------------------------------------ |

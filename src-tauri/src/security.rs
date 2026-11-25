@@ -34,6 +34,15 @@ pub(crate) fn parse_external_url(value: &str) -> Option<Url> {
     (allowed_scheme && credentials_absent).then_some(url)
 }
 
+pub(crate) fn parse_auth_redirect(value: &str) -> Option<Url> {
+    let url = parse_slack_url(value)?;
+    let path = url.path().to_ascii_lowercase();
+    (path.starts_with("/signin/")
+        || path.starts_with("/workspace-signin/")
+        || path.starts_with("/sso/"))
+    .then_some(url)
+}
+
 #[tauri::command]
 pub(crate) fn open_external_url(url: String) -> Result<(), OpenExternalUrlError> {
     let url = parse_external_url(&url).ok_or(OpenExternalUrlError::InvalidUrl)?;
@@ -42,7 +51,7 @@ pub(crate) fn open_external_url(url: String) -> Result<(), OpenExternalUrlError>
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_external_url, parse_slack_url, workspace_switch_url};
+    use super::{parse_auth_redirect, parse_external_url, parse_slack_url, workspace_switch_url};
 
     #[test]
     fn accepts_official_slack_https_urls() {
@@ -106,5 +115,18 @@ mod tests {
         ] {
             assert!(workspace_switch_url("T123", url).is_none(), "{url}");
         }
+    }
+
+    #[test]
+    fn auth_redirects_require_credential_free_https() {
+        assert!(parse_auth_redirect("https://acme.slack.com/sso/saml/start").is_some());
+        assert!(
+            parse_auth_redirect("https://slack.com/workspace-signin/oauth/google/start").is_some()
+        );
+        assert!(parse_auth_redirect("http://acme.slack.com/sso/saml/start").is_none());
+        assert!(parse_auth_redirect("https://user@acme.slack.com/sso/saml/start").is_none());
+        assert!(parse_auth_redirect("https://id.example.com/saml/start").is_none());
+        assert!(parse_auth_redirect("https://acme.slack.com/client/T123").is_none());
+        assert!(parse_auth_redirect("custom-protocol:payload").is_none());
     }
 }
