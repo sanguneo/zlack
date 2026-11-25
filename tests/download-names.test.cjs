@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const names = require("../src-tauri/download-names.cjs");
+const transfer = require("../src-tauri/download-transfer.cjs");
 
 const BASE = "https://app.slack.com/client/T1/C1";
 
@@ -184,4 +185,48 @@ test("falls back to a timestamped name so saves stay distinct", () => {
     }),
     "slack-file-20260102-030405",
   );
+});
+
+test("streams fixed-size chunks in order without buffering the whole download", async () => {
+  const parts = [
+    new Uint8Array(transfer.CHUNK_BYTES - 1).fill(1),
+    new Uint8Array([2, 3]),
+    new Uint8Array(transfer.CHUNK_BYTES).fill(4),
+  ];
+  const chunks = [];
+  const reader = {
+    async read() {
+      return parts.length ? { done: false, value: parts.shift() } : { done: true };
+    },
+    async cancel() {
+      assert.fail("successful stream must not be cancelled");
+    },
+  };
+
+  const result = await transfer.pump(reader, async (bytes, index) => {
+    chunks.push({ index, bytes: Uint8Array.from(bytes) });
+  });
+
+  assert.deepEqual(chunks.map(({ index }) => index), [0, 1, 2]);
+  assert.deepEqual(chunks.map(({ bytes }) => bytes.byteLength), [transfer.CHUNK_BYTES, transfer.CHUNK_BYTES, 1]);
+  assert.equal(chunks[0].bytes.at(-1), 2);
+  assert.equal(chunks[1].bytes.at(-1), 4);
+  assert.equal(chunks[2].bytes[0], 4);
+  assert.deepEqual(result, { total: transfer.CHUNK_BYTES * 2 + 1, chunks: 3 });
+});
+
+test("cancels the response stream when the cumulative limit is exceeded", async () => {
+  let cancelled = false;
+  const parts = [new Uint8Array(3), new Uint8Array(3)];
+  const reader = {
+    async read() {
+      return parts.length ? { done: false, value: parts.shift() } : { done: true };
+    },
+    async cancel() {
+      cancelled = true;
+    },
+  };
+
+  await assert.rejects(transfer.pump(reader, async () => {}, 5), /too large/);
+  assert.equal(cancelled, true);
 });

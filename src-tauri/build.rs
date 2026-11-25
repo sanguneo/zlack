@@ -1,8 +1,12 @@
 const COMMANDS: &[&str] = &[
     "notify",
     "update_notification_context",
+    "authorize_download",
     "save_image",
-    "save_file",
+    "start_file_download",
+    "write_file_chunk",
+    "finish_file_download",
+    "cancel_file_download",
     "open_downloads_folder",
     "load_user_css",
     "open_external_url",

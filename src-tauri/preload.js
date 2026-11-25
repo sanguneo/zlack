@@ -1446,9 +1446,7 @@ document.addEventListener('click', (e) => {
 }, true); // Capture phase to ensure we get it before Slack
 
 
-// 5. Slack attachment downloads (fetch -> IPC).
-// Keep in sync with MAX_FILE_BYTES in downloads.rs.
-const ZLACK_MAX_DOWNLOAD_BYTES = 256 * 1024 * 1024;
+// 5. Slack attachment downloads (stream -> chunked IPC).
 
 // Only intercept links with clear download intent: Slack's own download
 // buttons carry a `download` attribute, and the canonical attachment URLs
@@ -1540,26 +1538,59 @@ function zlackNotifySaved(savedPath) {
 }
 
 async function zlackDownloadFile(url, anchor) {
+    let authorization = null;
+    let transferId = null;
+    let reader = null;
     try {
         const response = await zlackAuthenticatedFetch(url);
         if (!response.ok) throw new Error('HTTP ' + response.status);
         const disposition = response.headers.get('content-disposition');
-        const blob = await response.blob();
-        if (!blob.size) throw new Error('empty file');
-        if (blob.size > ZLACK_MAX_DOWNLOAD_BYTES) throw new Error('file is too large to download');
-        const bytes = new Uint8Array(await blob.arrayBuffer());
         const filename = zlackResolveFilename({
             disposition,
             element: anchor,
             url,
             fallbackStem: 'slack-file',
         });
-        const savedPath = await tauriInvoke('save_file', {
+        if (!response.body || typeof response.body.getReader !== 'function') {
+            throw new Error('download streaming is not available');
+        }
+        const contentLength = Number(response.headers.get('content-length'));
+        if (Number.isFinite(contentLength) && contentLength > ZlackDownloadTransfer.MAX_DOWNLOAD_BYTES) {
+            throw new Error('file is too large to download');
+        }
+        reader = response.body.getReader();
+        authorization = await tauriInvoke('authorize_download', { filename });
+        transferId = await tauriInvoke('start_file_download', {
+            authorization,
             filename,
-            dataBase64: zlackToBase64(bytes),
         });
+        authorization = null;
+        const activeReader = reader;
+        reader = null;
+        const result = await ZlackDownloadTransfer.pump(
+            activeReader,
+            (bytes, chunkIndex) => tauriInvoke('write_file_chunk', {
+                transferId,
+                chunkIndex,
+                dataBase64: zlackToBase64(bytes),
+            })
+        );
+        if (!result.total) throw new Error('empty file');
+        const savedPath = await tauriInvoke('finish_file_download', { transferId });
+        transferId = null;
         zlackNotifySaved(savedPath);
     } catch (error) {
+        if (reader) {
+            await reader.cancel(error).catch((cancelError) => {
+                console.error('Zlack: response stream cleanup failed', cancelError);
+            });
+        }
+        const pendingId = transferId || authorization;
+        if (pendingId) {
+            await tauriInvoke('cancel_file_download', { transferId: pendingId }).catch((cancelError) => {
+                console.error('Zlack: download cleanup failed', cancelError);
+            });
+        }
         console.error('Zlack: file download failed', error);
         zlackPageToast('Download failed: ' + zlackErrorText(error));
     }
@@ -1640,19 +1671,32 @@ function zlackErrorText(error) {
     }
 
     async function saveImage(url, element) {
-        const blob = await fetchImageBlob(url);
-        const bytes = new Uint8Array(await blob.arrayBuffer());
-        const savedPath = await tauriInvoke('save_image', {
-            filename: zlackResolveFilename({
-                element,
-                url,
-                fallbackStem: 'slack-image',
-            }),
-            mime: blob.type || '',
-            dataBase64: zlackToBase64(bytes),
+        const filename = zlackResolveFilename({
+            element,
+            url,
+            fallbackStem: 'slack-image',
         });
-        zlackNotifySaved(savedPath);
-        return savedPath;
+        let authorization = null;
+        try {
+            const blob = await fetchImageBlob(url);
+            authorization = await tauriInvoke('authorize_download', { filename });
+            const bytes = new Uint8Array(await blob.arrayBuffer());
+            const savedPath = await tauriInvoke('save_image', {
+                authorization,
+                filename,
+                mime: blob.type || '',
+                dataBase64: zlackToBase64(bytes),
+            });
+            authorization = null;
+            zlackNotifySaved(savedPath);
+            return savedPath;
+        } finally {
+            if (authorization) {
+                await tauriInvoke('cancel_file_download', { transferId: authorization }).catch((error) => {
+                    console.error('Zlack: image save cleanup failed', error);
+                });
+            }
+        }
     }
 
     // The async Clipboard API only guarantees image/png, so anything else is

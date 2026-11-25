@@ -8,6 +8,7 @@ version = "1.6.0"
 dependencies = [
  "base64 0.22.1",
  "cc",
+ "getrandom 0.4.3",
  "image",
  "notify-rust",
  "open",
