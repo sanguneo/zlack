@@ -475,7 +475,18 @@ fn sync_hidden_workspace_geometry(app: &tauri::AppHandle, source: &tauri::Window
 }
 
 pub(crate) fn switch_to_workspace(app: &tauri::AppHandle, team: &str, url: Option<String>) {
-    let target_label = match ensure_workspace_window(app, team, url.clone()) {
+    // Check the destination before touching any window or the active state: an
+    // existing window skips create_workspace_window's check, and the script below
+    // would assign the URL to window.location. A rejected URL keeps the screen.
+    let validated_url = match url {
+        Some(url) => match security::workspace_switch_url(team, &url) {
+            Some(url) => Some(String::from(url)),
+            None => return,
+        },
+        None => None,
+    };
+
+    let target_label = match ensure_workspace_window(app, team, validated_url.clone()) {
         Some(label) => label,
         None => return,
     };
@@ -523,7 +534,7 @@ pub(crate) fn switch_to_workspace(app: &tauri::AppHandle, team: &str, url: Optio
         }
     }
 
-    if let Some(url) = url {
+    if let Some(url) = validated_url {
         let js_url = format!("{:?}", url);
         let js = format!(
             r#"(function(url) {{

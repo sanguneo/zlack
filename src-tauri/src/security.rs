@@ -17,6 +17,15 @@ pub(crate) fn parse_slack_url(value: &str) -> Option<Url> {
     (url.scheme() == "https" && allowed_host && credentials_absent).then_some(url)
 }
 
+/// Destination for `switch_workspace`: a Slack URL whose `/client/<team>` path
+/// belongs to the workspace being switched to. Anything else keeps the current
+/// screen, whether the target window already exists or not.
+pub(crate) fn workspace_switch_url(team: &str, value: &str) -> Option<Url> {
+    let url = parse_slack_url(value)?;
+    let mut segments = url.path_segments()?;
+    (segments.next() == Some("client") && segments.next() == Some(team)).then_some(url)
+}
+
 pub(crate) fn parse_external_url(value: &str) -> Option<Url> {
     let url = Url::parse(value).ok()?;
     let allowed_scheme = matches!(url.scheme(), "http" | "https");
@@ -33,7 +42,7 @@ pub(crate) fn open_external_url(url: String) -> Result<(), OpenExternalUrlError>
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_external_url, parse_slack_url};
+    use super::{parse_external_url, parse_slack_url, workspace_switch_url};
 
     #[test]
     fn accepts_official_slack_https_urls() {
@@ -64,5 +73,38 @@ mod tests {
         assert!(parse_external_url("file:///C:/Windows/System32/calc.exe").is_none());
         assert!(parse_external_url("custom-protocol:payload").is_none());
         assert!(parse_external_url("https://user@example.com/docs").is_none());
+    }
+
+    #[test]
+    fn rejects_urls_with_credentials() {
+        assert!(parse_slack_url("https://user:pass@app.slack.com/client").is_none());
+        assert!(parse_external_url("https://user:pass@example.com").is_none());
+    }
+
+    #[test]
+    fn workspace_switch_accepts_only_the_teams_slack_client() {
+        for url in [
+            "https://app.slack.com/client/T123",
+            "https://app.slack.com/client/T123/C456",
+            "https://acme.slack.com/client/T123/C456?thread=1",
+        ] {
+            assert!(workspace_switch_url("T123", url).is_some(), "{url}");
+        }
+
+        for url in [
+            "https://app.slack.com/client/T999/C456",
+            "https://app.slack.com/client/T1234",
+            "https://app.slack.com/T123",
+            "https://app.slack.com/",
+            "http://app.slack.com/client/T123",
+            "https://evil.example/client/T123",
+            "https://slack.com.evil.example/client/T123",
+            "https://user:pass@app.slack.com/client/T123",
+            "javascript:location='https://evil.example'//app.slack.com/client/T123",
+            "file:///client/T123",
+            "not a url",
+        ] {
+            assert!(workspace_switch_url("T123", url).is_none(), "{url}");
+        }
     }
 }
