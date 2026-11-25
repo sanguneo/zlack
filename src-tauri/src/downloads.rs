@@ -270,7 +270,9 @@ impl DownloadState {
     }
 }
 
-#[tauri::command]
+// Off the main thread: blocking_show waits for a dialog the plugin drives from
+// the main thread, so a sync command here would deadlock or freeze every window.
+#[tauri::command(async)]
 pub(crate) fn authorize_download(
     window: WebviewWindow,
     state: tauri::State<'_, DownloadState>,
@@ -302,7 +304,7 @@ pub(crate) fn authorize_download(
 /// user's Downloads folder. The bytes arrive base64-encoded because the WebView
 /// is the only context that can read authenticated `files.slack.com` images,
 /// and JSON IPC makes a compact string cheaper than a raw byte array.
-#[tauri::command]
+#[tauri::command(async)]
 pub(crate) fn save_image(
     window: WebviewWindow,
     state: tauri::State<'_, DownloadState>,
@@ -325,7 +327,7 @@ pub(crate) fn save_image(
     Ok(target.to_string_lossy().into_owned())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub(crate) fn start_file_download(
     window: WebviewWindow,
     state: tauri::State<'_, DownloadState>,
@@ -338,7 +340,7 @@ pub(crate) fn start_file_download(
     state.begin(&dir, window.label(), &authorization, &filename)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub(crate) fn write_file_chunk(
     window: WebviewWindow,
     state: tauri::State<'_, DownloadState>,
@@ -349,7 +351,7 @@ pub(crate) fn write_file_chunk(
     state.write_chunk(window.label(), &transfer_id, chunk_index, &data_base64)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub(crate) fn finish_file_download(
     window: WebviewWindow,
     state: tauri::State<'_, DownloadState>,
