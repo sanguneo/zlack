@@ -55,3 +55,10 @@ jobs:
       # catches issues like a removed-but-still-needed dependency.
       - name: Compile (debug)
         run: cargo build --manifest-path src-tauri/Cargo.toml --verbose
+
+      - name: Test Rust
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+
+      - name: Test Node
+        shell: bash
+        run: node --test tests/*.test.cjs src-tauri/*.test.cjs

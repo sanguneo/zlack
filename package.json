@@ -33,6 +33,7 @@
     "tauri": "tauri",
     "pretauri": "npm run update-version",
     "update-version": "node scripts/update-version.js",
+    "test": "node --test tests/*.test.cjs src-tauri/*.test.cjs",
     "build:dist:windows": "powershell -ExecutionPolicy Bypass -File build_dist.ps1",
     "build:dist:unix": "bash build_dist.sh"
   },

@@ -1,0 +1,6 @@
+# SHA-256 of the external tools the Linux release job downloads before signing.
+# GTK is pinned to tauri-apps/linuxdeploy-plugin-gtk commit
+# dda522bce37387f1b853d9095713bfaa924c8423 (master as reviewed on 2026-11-25),
+# not the moving master branch. Recompute both hashes when either URL changes.
+992d502a248e14ab185448ddf6f6e7d25558cb84d4623c354c3af350c25fccb3  linuxdeploy-plugin-appimage-x86_64.AppImage
+7804c9eef13e59bf2783aad9882ef9db8f3f3f9e8d631874b1d348d550a3693f  linuxdeploy-plugin-gtk.sh
