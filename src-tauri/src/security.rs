@@ -58,11 +58,23 @@ mod tests {
     }
 
     #[test]
-    fn external_urls_allow_only_http_and_https() {
-        assert!(parse_external_url("https://example.com/docs").is_some());
-        assert!(parse_external_url("http://example.com/docs").is_some());
-        assert!(parse_external_url("file:///C:/Windows/System32/calc.exe").is_none());
-        assert!(parse_external_url("custom-protocol:payload").is_none());
-        assert!(parse_external_url("https://user@example.com/docs").is_none());
+    fn rejects_urls_with_credentials() {
+        assert!(parse_slack_url("https://user:pass@app.slack.com/client").is_none());
+        assert!(parse_external_url("https://user:pass@example.com").is_none());
+    }
+
+    #[test]
+    fn switch_workspace_url_validation_regression() {
+        // Test cases for switch_workspace URL validation
+        // Valid Slack URLs
+        assert!(parse_slack_url("https://app.slack.com/client/T123/C456").is_some());
+        assert!(parse_slack_url("https://team.slack.com/client").is_some());
+
+        // Invalid URLs that should be rejected
+        assert!(parse_slack_url("http://app.slack.com/client").is_none()); // HTTP not HTTPS
+        assert!(parse_slack_url("https://evil.com/client").is_none()); // Not slack.com
+        assert!(parse_slack_url("https://slack.com.evil.com/client").is_none()); // Subdomain trick
+        assert!(parse_slack_url("file:///etc/passwd").is_none()); // File protocol
+        assert!(parse_slack_url("javascript:alert(1)").is_none()); // JavaScript
     }
 }

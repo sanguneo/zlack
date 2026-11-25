@@ -475,7 +475,18 @@ fn sync_hidden_workspace_geometry(app: &tauri::AppHandle, source: &tauri::Window
 }
 
 pub(crate) fn switch_to_workspace(app: &tauri::AppHandle, team: &str, url: Option<String>) {
-    let target_label = match ensure_workspace_window(app, team, url.clone()) {
+    // Validate URL before proceeding - same validation as for new windows
+    let validated_url = match url {
+        Some(ref url_str) => security::parse_slack_url(url_str).map(|_| url_str.clone()),
+        None => None,
+    };
+
+    // If URL validation failed, keep current screen
+    if url.is_some() && validated_url.is_none() {
+        return;
+    }
+
+    let target_label = match ensure_workspace_window(app, team, validated_url.clone()) {
         Some(label) => label,
         None => return,
     };
@@ -523,7 +534,7 @@ pub(crate) fn switch_to_workspace(app: &tauri::AppHandle, team: &str, url: Optio
         }
     }
 
-    if let Some(url) = url {
+    if let Some(url) = validated_url {
         let js_url = format!("{:?}", url);
         let js = format!(
             r#"(function(url) {{
